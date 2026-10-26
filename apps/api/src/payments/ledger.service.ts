@@ -9,6 +9,8 @@ export interface LedgerEntryInput {
   amount: number;
   /** Refuse the whole transaction if this would take the wallet below zero. */
   noOverdraft?: boolean;
+  /** Refuse if this would take the wallet below this balance (e.g. minus a company's credit limit). */
+  minBalance?: number;
 }
 
 export interface PostInput {
@@ -59,10 +61,11 @@ export class LedgerService {
 
     for (const entry of input.entries) {
       if (entry.amount === 0) continue;
-      if (entry.noOverdraft && entry.amount < 0) {
+      const floor = entry.minBalance ?? (entry.noOverdraft ? 0 : undefined);
+      if (floor !== undefined && entry.amount < 0) {
         // Conditional update: only succeeds if the balance covers it, even with concurrent requests.
         const { count } = await tx.wallet.updateMany({
-          where: { id: entry.walletId, balance: { gte: -entry.amount } },
+          where: { id: entry.walletId, balance: { gte: floor - entry.amount } },
           data: { balance: { increment: entry.amount } },
         });
         if (count === 0) throw new InsufficientFundsException();
@@ -76,6 +79,13 @@ export class LedgerService {
   /** A user's wallet of the given type, created on first use. */
   async userWallet(tx: Tx, userId: string, type: Extract<WalletType, 'CUSTOMER' | 'RUNNER'>) {
     return tx.wallet.upsert({ where: { type_userId: { type, userId } }, update: {}, create: { type, userId } });
+  }
+
+  /** A company's or shop's wallet, created on first use. */
+  async orgWallet(tx: Tx, type: 'BUSINESS' | 'MERCHANT', ownerId: string) {
+    return type === 'BUSINESS'
+      ? tx.wallet.upsert({ where: { type_businessId: { type, businessId: ownerId } }, update: {}, create: { type, businessId: ownerId } })
+      : tx.wallet.upsert({ where: { type_merchantId: { type, merchantId: ownerId } }, update: {}, create: { type, merchantId: ownerId } });
   }
 
   /** One of the platform's own wallets (escrow, revenue...). */

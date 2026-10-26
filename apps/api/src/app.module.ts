@@ -4,13 +4,16 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AdminModule } from './admin/admin.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { BusinessesModule } from './businesses/businesses.module.js';
 import { CategoriesController } from './categories/categories.controller.js';
 import { AuditModule } from './common/audit.service.js';
 import { AuthGuard } from './common/auth.guard.js';
 import { HttpThrottlerGuard } from './common/http-throttler.guard.js';
 import { DocumentsModule } from './documents/documents.module.js';
 import { HealthController } from './health/health.controller.js';
+import { InvoicesModule } from './invoices/invoices.module.js';
 import { InboxModule } from './notifications/inbox.service.js';
+import { MerchantsModule } from './merchants/merchants.module.js';
 import { MessagingModule } from './notifications/messaging.service.js';
 import { OrdersModule } from './orders/orders.module.js';
 import { PricingModule } from './pricing/pricing.module.js';
@@ -42,6 +45,9 @@ import { SupportModule } from './support/support.module.js';
     OrdersModule,
     SupportModule,
     AdminModule,
+    BusinessesModule,
+    MerchantsModule,
+    InvoicesModule,
   ],
   controllers: [HealthController, CategoriesController],
   providers: [

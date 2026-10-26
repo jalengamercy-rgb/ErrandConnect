@@ -77,6 +77,16 @@ export class OrderDetailsDto {
   @IsIn(URGENCY_LEVELS)
   urgency?: Urgency;
 
+  /** Order from a listed shop: the shop becomes the pickup point. */
+  @IsOptional()
+  @IsUUID()
+  merchantId?: string;
+
+  /** Order on behalf of a company the customer belongs to. */
+  @IsOptional()
+  @IsUUID()
+  businessId?: string;
+
   /** Estimated cost of items the runner buys for the customer. */
   @IsOptional()
   @IsInt()

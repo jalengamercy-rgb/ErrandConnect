@@ -10,6 +10,7 @@ import {
 import {
   ACTIVE_ORDER_STATUSES,
   CASH_DEBT_LIMIT,
+  DEFAULT_MERCHANT_COMMISSION_RATE,
   CUSTOMER_CANCELLABLE_STATUSES,
   DEFAULT_JOB_RADIUS_KM,
   ORDER_LIMIT_BY_LEVEL,
@@ -31,6 +32,7 @@ import { RealtimeService } from '../realtime/realtime.service.js';
 import { DispatchService, jobStart } from '../realtime/dispatch.service.js';
 import { PaymentsService } from '../payments/payments.service.js';
 import { recalculateRunnerRating } from './ratings.js';
+import { InboxService } from '../notifications/inbox.service.js';
 import type { CreateOrderDto, LocationDto, OrderDetailsDto, ReviewDto } from './orders.dto.js';
 
 const MAX_ACTIVE_ORDERS_PER_CUSTOMER = 5;
@@ -62,6 +64,8 @@ const ORDER_INCLUDE = {
   events: { orderBy: { createdAt: 'asc' }, select: { status: true, note: true, createdAt: true } },
   reviews: { select: { authorId: true, stars: true, comment: true } },
   escrow: { select: { status: true } },
+  business: { select: { id: true, name: true } },
+  merchant: { select: { id: true, name: true, phone: true, addressLine: true } },
   payments: {
     orderBy: { createdAt: 'desc' },
     take: 1,
@@ -84,13 +88,17 @@ export class OrdersService {
     private readonly realtime: RealtimeService,
     private readonly dispatch: DispatchService,
     private readonly payments: PaymentsService,
+    private readonly inbox: InboxService,
   ) {}
 
   // ─── Pricing & creation (customers) ───
 
   private async resolveDropoff(customerId: string, dto: OrderDetailsDto): Promise<LocationDto> {
     if (dto.dropoffAddressId) {
-      const address = await this.prisma.address.findFirst({ where: { id: dto.dropoffAddressId, userId: customerId } });
+      // A personal saved address, or one of the company's branches for business orders.
+      const address = await this.prisma.address.findFirst({
+        where: { id: dto.dropoffAddressId, OR: [{ userId: customerId }, ...(dto.businessId ? [{ businessId: dto.businessId }] : [])] },
+      });
       if (!address) throw new NotFoundException('Saved address not found');
       return { address: describeAddress(address), lat: address.lat, lng: address.lng, label: address.label };
     }
@@ -102,14 +110,25 @@ export class OrdersService {
     const category = await this.prisma.serviceCategory.findFirst({ where: { slug: dto.categorySlug, isActive: true } });
     if (!category) throw new BadRequestException('Unknown errand type');
     const dropoff = await this.resolveDropoff(customerId, dto);
+    const merchant = dto.merchantId ? await this.prisma.merchant.findFirst({ where: { id: dto.merchantId, status: 'ACTIVE' } }) : null;
+    if (dto.merchantId && (!merchant || merchant.lat == null || merchant.lng == null))
+      throw new BadRequestException('This shop is not available');
+    const pickup: LocationDto | undefined = merchant
+      ? {
+          address: [merchant.name, merchant.addressLine].filter(Boolean).join(', '),
+          lat: merchant.lat!,
+          lng: merchant.lng!,
+          label: merchant.name,
+        }
+      : dto.pickup;
     // Without a pickup point the runner starts near the customer; the base fee covers that.
-    const distanceKm = dto.pickup ? estimateRoadKm(dto.pickup, dropoff) : 0;
+    const distanceKm = pickup ? estimateRoadKm(pickup, dropoff) : 0;
     const config = await this.pricing.getConfig();
     const quote = calculateQuote(
       { itemsCost: dto.itemsCost ?? 0, errandFee: category.baseFee, distanceKm, deliveryType: dto.deliveryType, urgency: dto.urgency },
       config,
     );
-    return { category, dropoff, distanceKm, quote, config };
+    return { category, dropoff, pickup, merchant, distanceKm, quote, config };
   }
 
   async create(customerId: string, dto: CreateOrderDto) {
@@ -121,21 +140,41 @@ export class OrdersService {
       throw new BadRequestException('Schedule between 15 minutes and 14 days from now');
     }
 
-    const { category, dropoff, distanceKm, quote, config } = await this.quote(customerId, dto);
+    const { category, dropoff, pickup, merchant, distanceKm, quote, config } = await this.quote(customerId, dto);
+    const method = dto.paymentMethod;
 
-    const profile = await this.prisma.customerProfile.findUniqueOrThrow({
-      where: { userId: customerId },
-      select: { verificationLevel: true },
-    });
-    const limit = ORDER_LIMIT_BY_LEVEL[profile.verificationLevel];
-    if (limit !== null && limit !== undefined && quote.customer.total > limit) {
-      throw new ForbiddenException(
-        `Orders above KES ${limit.toLocaleString('en-KE')} need a higher verification level. Verify your ${profile.verificationLevel === 1 ? 'email' : 'ID'} to continue.`,
-      );
+    // Company orders: the person must be a member of an active business.
+    const membership = dto.businessId
+      ? await this.prisma.businessMember.findUnique({
+          where: { businessId_userId: { businessId: dto.businessId, userId: customerId } },
+          include: { business: true },
+        })
+      : null;
+    if (dto.businessId && (!membership || membership.business.status !== 'ACTIVE')) {
+      throw new ForbiddenException('You are not a member of this company account, or it is not active yet');
     }
-    const active = await this.prisma.order.count({ where: { customerId, status: { in: [...ACTIVE_ORDER_STATUSES] } } });
-    if (active >= MAX_ACTIVE_ORDERS_PER_CUSTOMER) {
-      throw new ConflictException(`You can have up to ${MAX_ACTIVE_ORDERS_PER_CUSTOMER} active errands at a time`);
+    if (method === 'BUSINESS_INVOICE' && !membership?.business.monthlyInvoicing) {
+      throw new BadRequestException('Paying by invoice needs an approved company account with monthly invoicing');
+    }
+
+    if (!membership) {
+      // Personal orders are limited by the customer's verification level and number of open errands.
+      const profile = await this.prisma.customerProfile.findUniqueOrThrow({
+        where: { userId: customerId },
+        select: { verificationLevel: true },
+      });
+      const limit = ORDER_LIMIT_BY_LEVEL[profile.verificationLevel];
+      if (limit !== null && limit !== undefined && quote.customer.total > limit) {
+        throw new ForbiddenException(
+          `Orders above KES ${limit.toLocaleString('en-KE')} need a higher verification level. Verify your ${profile.verificationLevel === 1 ? 'email' : 'ID'} to continue.`,
+        );
+      }
+      const active = await this.prisma.order.count({
+        where: { customerId, businessId: null, status: { in: [...ACTIVE_ORDER_STATUSES] } },
+      });
+      if (active >= MAX_ACTIVE_ORDERS_PER_CUSTOMER) {
+        throw new ConflictException(`You can have up to ${MAX_ACTIVE_ORDERS_PER_CUSTOMER} active errands at a time`);
+      }
     }
 
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -144,19 +183,23 @@ export class OrdersService {
       async (code) => !!(await this.prisma.order.findUnique({ where: { orderNumber: code }, select: { id: true } })),
     );
 
-    const method = dto.paymentMethod;
     const data = {
       orderNumber,
       customerId,
+      businessId: membership?.businessId,
+      merchantId: merchant?.id,
+      merchantCommission: merchant
+        ? Math.round(quote.customer.itemsCost * (merchant.commissionRate ?? DEFAULT_MERCHANT_COMMISSION_RATE))
+        : 0,
       categorySlug: category.slug,
       description: dto.description,
       deliveryType: dto.deliveryType,
       urgency: dto.urgency ?? 'STANDARD',
       scheduledFor,
-      pickupLabel: dto.pickup?.label,
-      pickupAddress: dto.pickup?.address,
-      pickupLat: dto.pickup?.lat,
-      pickupLng: dto.pickup?.lng,
+      pickupLabel: pickup?.label,
+      pickupAddress: pickup?.address,
+      pickupLat: pickup?.lat,
+      pickupLng: pickup?.lng,
       dropoffLabel: dropoff.label,
       dropoffAddress: dropoff.address,
       dropoffLat: dropoff.lat,
@@ -195,27 +238,111 @@ export class OrdersService {
       return { ...(await this.getForViewer(order.id, { id: customerId, staffRole: null })), paymentRequest };
     }
 
+    // Members' company orders above their limit wait for an owner or admin.
+    if (
+      method === 'BUSINESS_INVOICE' &&
+      membership?.role === 'MEMBER' &&
+      membership.approvalLimit !== null &&
+      quote.customer.total > membership.approvalLimit
+    ) {
+      const order = await this.prisma.order.create({
+        data: {
+          ...data,
+          status: 'PENDING_APPROVAL',
+          events: { create: { status: 'PENDING_APPROVAL', actorId: customerId, note: 'Waiting for company approval' } },
+        },
+      });
+      const approvers = await this.prisma.businessMember.findMany({
+        where: { businessId: membership.businessId, role: { in: ['OWNER', 'ADMIN'] } },
+        select: { userId: true },
+      });
+      await this.inbox.notify(
+        approvers.map((a) => a.userId),
+        {
+          title: 'Errand needs your approval',
+          body: `${order.orderNumber}: ${order.description.slice(0, 120)}`,
+          link: `/orders/${order.id}`,
+        },
+      );
+      return this.getForViewer(order.id, { id: customerId, staffRole: null });
+    }
+
+    const notes: Record<string, string> = {
+      WALLET: 'Errand posted · paid from wallet',
+      CASH: 'Errand posted · cash on delivery',
+      BUSINESS_INVOICE: `Errand posted · billed to ${membership?.business.name}`,
+    };
     const order = await this.prisma.$transaction(async (tx) => {
       const created = await tx.order.create({
         data: {
           ...data,
           status: 'PENDING',
-          paidAt: method === 'WALLET' ? new Date() : null,
-          events: {
-            create: {
-              status: 'PENDING',
-              actorId: customerId,
-              note: method === 'WALLET' ? 'Errand posted · paid from wallet' : 'Errand posted · cash on delivery',
-            },
-          },
+          paidAt: method === 'WALLET' || method === 'BUSINESS_INVOICE' ? new Date() : null,
+          events: { create: { status: 'PENDING', actorId: customerId, note: notes[method] } },
         },
       });
       if (method === 'WALLET') await this.payments.holdFromWallet(tx, created);
+      if (method === 'BUSINESS_INVOICE') await this.payments.holdFromBusinessCredit(tx, created, membership!.business.creditLimit);
       return created;
     });
 
     await this.dispatch.newJob(order);
     return this.getForViewer(order.id, { id: customerId, staffRole: null });
+  }
+
+  // ─── Company approvals ───
+
+  private async approverFor(orderId: string, userId: string) {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId }, include: { business: true } });
+    if (!order?.businessId) throw new NotFoundException('Order not found');
+    const member = await this.prisma.businessMember.findUnique({ where: { businessId_userId: { businessId: order.businessId, userId } } });
+    if (!member || member.role === 'MEMBER') throw new ForbiddenException('Only company owners and admins can approve errands');
+    if (order.status !== 'PENDING_APPROVAL') throw new ConflictException('This errand is not waiting for approval');
+    return order;
+  }
+
+  async approve(orderId: string, approverId: string) {
+    const order = await this.approverFor(orderId, approverId);
+    const approved = await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.order.updateMany({
+        where: { id: orderId, status: 'PENDING_APPROVAL' },
+        data: { status: 'PENDING', approvedById: approverId, paidAt: new Date() },
+      });
+      if (count === 0) throw new ConflictException('The order changed. Please refresh');
+      const updated = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
+      await this.payments.holdFromBusinessCredit(tx, updated, order.business!.creditLimit);
+      await tx.orderEvent.create({
+        data: { orderId, status: 'PENDING', actorId: approverId, note: `Approved · billed to ${order.business!.name}` },
+      });
+      return updated;
+    });
+    this.dispatch.orderUpdated(orderId, order.customerId, null, 'PENDING');
+    await this.dispatch.newJob(approved);
+    await this.inbox.notify([order.customerId], {
+      title: 'Errand approved',
+      body: `${order.orderNumber} was approved and is looking for a runner.`,
+      link: `/orders/${orderId}`,
+    });
+    return this.getForViewer(orderId, { id: approverId, staffRole: null });
+  }
+
+  async rejectApproval(orderId: string, approverId: string, reason: string) {
+    const order = await this.approverFor(orderId, approverId);
+    await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.order.updateMany({
+        where: { id: orderId, status: 'PENDING_APPROVAL' },
+        data: { status: 'CANCELLED', cancelledAt: new Date(), cancelReason: `Not approved: ${reason}` },
+      });
+      if (count === 0) throw new ConflictException('The order changed. Please refresh');
+      await tx.orderEvent.create({ data: { orderId, status: 'CANCELLED', actorId: approverId, note: `Not approved: ${reason}` } });
+    });
+    this.dispatch.orderUpdated(orderId, order.customerId, null, 'CANCELLED');
+    await this.inbox.notify([order.customerId], {
+      title: 'Errand not approved',
+      body: `${order.orderNumber}: ${reason}`,
+      link: `/orders/${orderId}`,
+    });
+    return this.getForViewer(orderId, { id: approverId, staffRole: null });
   }
 
   // ─── Reading ───
@@ -269,7 +396,18 @@ export class OrdersService {
     const order = await this.prisma.order.findUnique({ where: { id: orderId }, include: ORDER_INCLUDE });
     const isCustomer = order?.customerId === viewer.id;
     const isRunner = !!order?.runnerId && order.runnerId === viewer.id;
-    if (!order || (!isCustomer && !isRunner && !viewer.staffRole)) throw new NotFoundException('Order not found');
+    // Company owners/admins see their company's errands; shop staff see errands from their shop.
+    const isOrgViewer =
+      !!order &&
+      !isCustomer &&
+      !isRunner &&
+      ((!!order.businessId &&
+        !!(await this.prisma.businessMember.findFirst({
+          where: { businessId: order.businessId, userId: viewer.id, role: { in: ['OWNER', 'ADMIN'] } },
+        }))) ||
+        (!!order.merchantId &&
+          !!(await this.prisma.merchantMember.findFirst({ where: { merchantId: order.merchantId, userId: viewer.id } }))));
+    if (!order || (!isCustomer && !isRunner && !isOrgViewer && !viewer.staffRole)) throw new NotFoundException('Order not found');
     return this.toView(order, isCustomer || !!viewer.staffRole, viewer.id);
   }
 
@@ -446,6 +584,7 @@ export class OrdersService {
       await tx.runnerProfile.update({ where: { userId: runnerId }, data: { jobsCompleted: { increment: 1 } } });
       if (order.paidAt) await this.payments.releaseEscrow(tx, order, runnerId);
       else await this.payments.chargeCashCommission(tx, order, runnerId);
+      await this.payments.chargeMerchantCommission(tx, order);
     });
     this.dispatch.orderUpdated(orderId, order.customerId, runnerId, 'COMPLETED');
     return this.getForViewer(orderId, { id: runnerId, staffRole: null });

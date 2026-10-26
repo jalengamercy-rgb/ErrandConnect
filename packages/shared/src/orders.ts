@@ -48,6 +48,7 @@ export function isForwardMove(from: OrderStatus, to: OrderStatus): boolean {
 }
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  PENDING_APPROVAL: 'Waiting for company approval',
   AWAITING_PAYMENT: 'Waiting for payment',
   PENDING: 'Looking for a runner',
   ACCEPTED: 'Runner on the way',

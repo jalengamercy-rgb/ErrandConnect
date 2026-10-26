@@ -1,5 +1,6 @@
 /** How customers can pay for an errand. */
-export const PAYMENT_METHODS = ['MPESA', 'WALLET', 'CASH'] as const;
+/** BUSINESS_INVOICE: charged to a company's credit and paid on the monthly invoice. */
+export const PAYMENT_METHODS = ['MPESA', 'WALLET', 'CASH', 'BUSINESS_INVOICE'] as const;
 export type PaymentMethodChoice = (typeof PAYMENT_METHODS)[number];
 
 /** Smallest withdrawal to M-Pesa, in KES. */

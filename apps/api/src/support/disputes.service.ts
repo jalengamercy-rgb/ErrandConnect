@@ -121,6 +121,7 @@ export class DisputesService {
       } else if (dto.outcome === 'PAY_RUNNER' && escrowOnHold) {
         if (!order.runnerId) throw new BadRequestException('No runner to pay on this order');
         await this.payments.releaseEscrow(tx, order, order.runnerId, { includeOnHold: true });
+        await this.payments.chargeMerchantCommission(tx, order);
         finalStatus = 'COMPLETED';
       } else if (escrowOnHold) {
         await tx.escrow.update({ where: { orderId: order.id }, data: { status: 'HELD' } });

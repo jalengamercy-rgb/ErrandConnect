@@ -8,10 +8,10 @@ import {
   NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
-import type { Order, Prisma } from '../generated/prisma/client.js';
+import type { Invoice, Order, Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { DispatchService } from '../realtime/dispatch.service.js';
-import { LedgerService } from './ledger.service.js';
+import { InsufficientFundsException, LedgerService } from './ledger.service.js';
 import { FakeMpesaClient } from './mpesa/fake.client.js';
 import { MpesaClient, MpesaError, parseStkCallback, type StkCallbackResult } from './mpesa/mpesa.client.js';
 import { WithdrawalsService } from './withdrawals.service.js';
@@ -93,9 +93,10 @@ export class PaymentsService implements OnModuleInit {
   private async settleStk(result: StkCallbackResult, raw: unknown) {
     const payment = await this.prisma.payment.findUnique({
       where: { providerRequestId: result.checkoutRequestId },
-      include: { order: true },
+      include: { order: true, invoice: true },
     });
     if (!payment || payment.status !== 'PENDING') return;
+    if (payment.invoice) return this.settleInvoiceStk(payment.id, payment.invoice, result, raw);
     const order = payment.order;
 
     if (result.resultCode !== 0) {
@@ -165,10 +166,13 @@ export class PaymentsService implements OnModuleInit {
     if (paidOrder) await this.dispatch.newJob(paidOrder);
   }
 
+  /** Returns escrowed money to whoever paid: the company for invoice orders, otherwise the customer's wallet. */
   private async toCustomerWallet(tx: Tx, order: Order, amount: number, description: string, idempotencyKey: string) {
     const [escrow, wallet] = await Promise.all([
       this.ledger.systemWallet(tx, 'ESCROW'),
-      this.ledger.userWallet(tx, order.customerId, 'CUSTOMER'),
+      order.paymentMethod === 'BUSINESS_INVOICE' && order.businessId
+        ? this.ledger.orgWallet(tx, 'BUSINESS', order.businessId)
+        : this.ledger.userWallet(tx, order.customerId, 'CUSTOMER'),
     ]);
     await this.ledger.post(tx, {
       type: 'REFUND',
@@ -228,6 +232,124 @@ export class PaymentsService implements OnModuleInit {
       ],
     });
     await tx.escrow.create({ data: { orderId: order.id, amount: order.total } });
+  }
+
+  /**
+   * Charges a business order to the company's credit. The company wallet goes
+   * negative (what they owe) but never below minus their credit limit.
+   */
+  async holdFromBusinessCredit(tx: Tx, order: Order, creditLimit: number) {
+    if (!order.businessId) throw new Error('Not a business order');
+    const [wallet, escrow] = await Promise.all([
+      this.ledger.orgWallet(tx, 'BUSINESS', order.businessId),
+      this.ledger.systemWallet(tx, 'ESCROW'),
+    ]);
+    try {
+      await this.ledger.post(tx, {
+        type: 'ESCROW_HOLD',
+        description: `Errand ${order.orderNumber} on company account`,
+        orderId: order.id,
+        idempotencyKey: `credit-hold:${order.id}`,
+        entries: [
+          { walletId: wallet.id, amount: -order.total, minBalance: -creditLimit },
+          { walletId: escrow.id, amount: order.total },
+        ],
+      });
+    } catch (error) {
+      if (error instanceof InsufficientFundsException) {
+        throw new BadRequestException('Your company has reached its credit limit. Please pay the outstanding invoice or contact us');
+      }
+      throw error;
+    }
+    await tx.escrow.create({ data: { orderId: order.id, amount: order.total } });
+  }
+
+  /** Shop orders: the merchant owes the platform its commission (billed monthly). */
+  async chargeMerchantCommission(tx: Tx, order: Order) {
+    if (!order.merchantId || order.merchantCommission <= 0) return;
+    const [merchant, platform] = await Promise.all([
+      this.ledger.orgWallet(tx, 'MERCHANT', order.merchantId),
+      this.ledger.systemWallet(tx, 'PLATFORM_REVENUE'),
+    ]);
+    await this.ledger.post(tx, {
+      type: 'ADJUSTMENT',
+      description: `Commission on ${order.orderNumber}`,
+      orderId: order.id,
+      idempotencyKey: `merchant-fee:${order.id}`,
+      entries: [
+        { walletId: merchant.id, amount: -order.merchantCommission },
+        { walletId: platform.id, amount: order.merchantCommission },
+      ],
+    });
+  }
+
+  // ─── Invoices ───
+
+  /** Money received for a business or merchant invoice (M-Pesa or bank). */
+  async creditInvoice(tx: Tx, invoice: Invoice, amount: number, reference: string, idempotencyKey: string) {
+    const ownerType = invoice.businessId ? 'BUSINESS' : 'MERCHANT';
+    const [clearing, wallet] = await Promise.all([
+      this.ledger.systemWallet(tx, 'EXTERNAL_CLEARING'),
+      this.ledger.orgWallet(tx, ownerType, (invoice.businessId ?? invoice.merchantId)!),
+    ]);
+    await this.ledger.post(tx, {
+      type: 'PAYMENT_IN',
+      description: `Payment for invoice ${invoice.number} ${reference}`.trim(),
+      idempotencyKey,
+      entries: [
+        { walletId: clearing.id, amount: -amount },
+        { walletId: wallet.id, amount },
+      ],
+    });
+    if (amount >= invoice.amount) {
+      await tx.invoice.updateMany({
+        where: { id: invoice.id, status: 'ISSUED' },
+        data: { status: 'PAID', paidAt: new Date(), paymentReference: reference },
+      });
+    }
+  }
+
+  private async settleInvoiceStk(paymentId: string, invoice: Invoice, result: StkCallbackResult, raw: unknown) {
+    if (result.resultCode !== 0) {
+      await this.prisma.payment.updateMany({
+        where: { id: paymentId, status: 'PENDING' },
+        data: {
+          status: result.resultCode === 1032 ? 'CANCELLED' : 'FAILED',
+          failureReason: result.resultDesc,
+          rawCallback: raw as Prisma.InputJsonValue,
+        },
+      });
+      return;
+    }
+    const payment = await this.prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+    await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.payment.updateMany({
+        where: { id: paymentId, status: 'PENDING' },
+        data: { status: 'SUCCEEDED', providerReceipt: result.receipt, rawCallback: raw as Prisma.InputJsonValue },
+      });
+      if (count === 0) return;
+      await this.creditInvoice(tx, invoice, result.amount ?? payment.amount, result.receipt ?? '', `stk:${result.checkoutRequestId}`);
+    });
+  }
+
+  /** Sends an M-Pesa prompt to pay an invoice. */
+  async requestInvoicePayment(invoice: Invoice, phone: string) {
+    if (invoice.status !== 'ISSUED') throw new ConflictException('This invoice is not open for payment');
+    try {
+      const response = await this.mpesa.stkPush({
+        phone,
+        amount: invoice.amount,
+        accountReference: invoice.number.replace(/-/g, '').slice(-12),
+        description: 'ErrandCONNECT',
+      });
+      await this.prisma.payment.create({
+        data: { invoiceId: invoice.id, provider: 'MPESA', amount: invoice.amount, phone, providerRequestId: response.checkoutRequestId },
+      });
+      return { requested: true, message: 'Check your phone and enter your M-Pesa PIN to pay' };
+    } catch (error) {
+      if (error instanceof MpesaError) throw new BadRequestException(error.message);
+      throw error;
+    }
   }
 
   /** Delivery confirmed: pay the runner and the platform from escrow. */

@@ -11,6 +11,7 @@ export const URGENCY_LEVELS = ['STANDARD', 'WITHIN_1_HOUR', 'WITHIN_30_MIN', 'WI
 export type Urgency = (typeof URGENCY_LEVELS)[number];
 
 export const ORDER_STATUSES = [
+  'PENDING_APPROVAL',
   'AWAITING_PAYMENT',
   'PENDING',
   'ACCEPTED',

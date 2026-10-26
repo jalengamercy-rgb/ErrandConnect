@@ -542,6 +542,7 @@ model Business {
   addresses Address[]
   wallets   Wallet[]
   orders    Order[]
+  invoices  Invoice[]
 
   @@map("businesses")
 }
@@ -580,6 +581,7 @@ model Merchant {
   lng                Float?
   registrationNumber String?   @map("registration_number")
   taxNumber          String?   @map("tax_number")
+  description        String?
   /// Overrides the default merchant commission if set (0-1).
   commissionRate     Float?    @map("commission_rate")
   isFeatured         Boolean   @default(false) @map("is_featured")
@@ -590,10 +592,11 @@ model Merchant {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  members MerchantMember[]
-  wallets Wallet[]
-  orders  Order[]
-  reviews Review[]
+  members  MerchantMember[]
+  wallets  Wallet[]
+  orders   Order[]
+  reviews  Review[]
+  invoices Invoice[]
 
   @@map("merchants")
 }
@@ -628,6 +631,8 @@ model ServiceCategory {
 }
 
 enum OrderStatus {
+  /// Business order waiting for a company owner/admin to approve it. Hidden from runners.
+  PENDING_APPROVAL
   /// M-Pesa payment requested but not yet confirmed. Hidden from runners.
   AWAITING_PAYMENT
   PENDING
@@ -708,16 +713,28 @@ model Order {
   /// Full quote + pricing config used, so the price can always be explained later.
   pricingSnapshot Json @map("pricing_snapshot")
 
-  paymentMethod PaymentMethod @map("payment_method")
+  paymentMethod      PaymentMethod @map("payment_method")
   /// Number the M-Pesa payment prompt is sent to.
-  mpesaPhone    String?       @map("mpesa_phone")
+  mpesaPhone         String?       @map("mpesa_phone")
   /// When the customer's money reached escrow (M-Pesa or wallet orders).
-  paidAt        DateTime?     @map("paid_at")
+  paidAt             DateTime?     @map("paid_at")
+  /// Commission charged to the merchant on completion (shop orders only).
+  merchantCommission Int           @default(0) @map("merchant_commission")
+  /// When the shop marked the items packed and ready for the runner.
+  merchantReadyAt    DateTime?     @map("merchant_ready_at")
+  /// Company owner/admin who approved a business order over the member's limit.
+  approvedById       String?       @map("approved_by_id")
+  /// Monthly business invoice this order was billed on.
+  invoiceId          String?       @map("invoice_id")
+  invoice            Invoice?      @relation("InvoiceOrders", fields: [invoiceId], references: [id])
+  /// Monthly merchant commission invoice this order was billed on.
+  merchantInvoiceId  String?       @map("merchant_invoice_id")
+  merchantInvoice    Invoice?      @relation("MerchantInvoiceOrders", fields: [merchantInvoiceId], references: [id])
   /// 4-digit code only the customer can see. The runner enters it on
   /// delivery to prove they reached the customer (and, from Phase 3, release escrow).
-  deliveryPin   String        @map("delivery_pin")
+  deliveryPin        String        @map("delivery_pin")
   /// Wrong PIN attempts, to stop runners guessing.
-  pinAttempts   Int           @default(0) @map("pin_attempts")
+  pinAttempts        Int           @default(0) @map("pin_attempts")
 
   acceptedAt   DateTime? @map("accepted_at")
   pickedUpAt   DateTime? @map("picked_up_at")
@@ -822,6 +839,9 @@ model Payment {
   id                String          @id @default(uuid())
   orderId           String?         @map("order_id")
   order             Order?          @relation(fields: [orderId], references: [id])
+  /// Set when the payment settles a business or merchant invoice instead of an order.
+  invoiceId         String?         @map("invoice_id")
+  invoice           Invoice?        @relation(fields: [invoiceId], references: [id])
   provider          PaymentProvider
   amount            Int
   phone             String?
@@ -1089,4 +1109,40 @@ model Notification {
 
   @@index([userId, createdAt])
   @@map("notifications")
+}
+
+// ───────────────────────────── Billing ─────────────────────────────
+
+enum InvoiceStatus {
+  ISSUED
+  PAID
+  VOID
+}
+
+/// Monthly bill: a business's errands on credit, or a merchant's commission.
+model Invoice {
+  id               String        @id @default(uuid())
+  number           String        @unique
+  businessId       String?       @map("business_id")
+  business         Business?     @relation(fields: [businessId], references: [id])
+  merchantId       String?       @map("merchant_id")
+  merchant         Merchant?     @relation(fields: [merchantId], references: [id])
+  periodStart      DateTime      @map("period_start")
+  periodEnd        DateTime      @map("period_end")
+  amount           Int
+  status           InvoiceStatus @default(ISSUED)
+  dueDate          DateTime      @map("due_date")
+  paidAt           DateTime?     @map("paid_at")
+  /// e.g. M-Pesa receipt or bank reference.
+  paymentReference String?       @map("payment_reference")
+  createdAt        DateTime      @default(now()) @map("created_at")
+
+  orders         Order[]   @relation("InvoiceOrders")
+  merchantOrders Order[]   @relation("MerchantInvoiceOrders")
+  payments       Payment[]
+
+  @@index([businessId])
+  @@index([merchantId])
+  @@index([status])
+  @@map("invoices")
 }

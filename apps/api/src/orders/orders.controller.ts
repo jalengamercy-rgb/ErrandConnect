@@ -52,6 +52,19 @@ export class OrdersController {
     return this.orders.cancelByCustomer(id, user.id, dto.reason);
   }
 
+  /** Company owner/admin approves a member's errand. */
+  @Post(':id/approve')
+  @HttpCode(200)
+  approve(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.orders.approve(id, user.id);
+  }
+
+  @Post(':id/reject')
+  @HttpCode(200)
+  rejectApproval(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: CancelDto) {
+    return this.orders.rejectApproval(id, user.id, dto.reason);
+  }
+
   @Post(':id/accept')
   @HttpCode(200)
   @Roles('RUNNER')
