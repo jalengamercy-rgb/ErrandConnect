@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
+import { GrowthModule } from '../growth/growth.module.js';
 import { PaymentsModule } from '../payments/payments.module.js';
 import { RealtimeGateway } from '../realtime/realtime.gateway.js';
 import { OrdersController, RunnerJobsController } from './orders.controller.js';
 import { OrdersService } from './orders.service.js';
 
 @Module({
-  imports: [PaymentsModule],
+  imports: [PaymentsModule, GrowthModule],
   controllers: [OrdersController, RunnerJobsController],
   providers: [OrdersService, RealtimeGateway],
   exports: [OrdersService],

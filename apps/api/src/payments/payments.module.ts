@@ -45,6 +45,6 @@ function createMpesaClient(config: ConfigService): MpesaClient {
     WalletsService,
     { provide: MpesaClient, inject: [ConfigService], useFactory: createMpesaClient },
   ],
-  exports: [PaymentsService, LedgerService],
+  exports: [PaymentsService, LedgerService, MpesaClient],
 })
 export class PaymentsModule {}

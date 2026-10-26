@@ -17,6 +17,7 @@ import {
   IsLongitude,
   IsOptional,
   IsString,
+  MaxLength,
   IsUUID,
   Length,
   Matches,
@@ -81,6 +82,12 @@ export class OrderDetailsDto {
   @IsOptional()
   @IsUUID()
   merchantId?: string;
+
+  /** Promo code for a discount (personal errands only). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  promoCode?: string;
 
   /** Order on behalf of a company the customer belongs to. */
   @IsOptional()

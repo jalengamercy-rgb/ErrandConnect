@@ -27,9 +27,15 @@ const PUBLIC_FIELDS = {
   lng: true,
   description: true,
   isFeatured: true,
+  featuredUntil: true,
   ratingAvg: true,
   ratingCount: true,
 } satisfies Prisma.MerchantSelect;
+
+/** Featured by staff, or paid placement that hasn't run out. */
+function featured<T extends { isFeatured: boolean; featuredUntil: Date | null }>({ featuredUntil, ...shop }: T) {
+  return { ...shop, isFeatured: shop.isFeatured || (!!featuredUntil && featuredUntil > new Date()) };
+}
 
 /** Statuses where the shop still has something to do or watch. */
 const SHOP_ACTIVE: OrderStatus[] = ACTIVE_ORDER_STATUSES.filter((s) => s !== 'PENDING_APPROVAL' && s !== 'AWAITING_PAYMENT');
@@ -69,6 +75,7 @@ export class MerchantsService {
     });
     const here = query.lat != null && query.lng != null ? { lat: query.lat, lng: query.lng } : null;
     return shops
+      .map(featured)
       .map((s) => ({ ...s, distanceKm: here ? Math.round(haversineKm(here, { lat: s.lat!, lng: s.lng! }) * 10) / 10 : null }))
       .sort((a, b) => Number(b.isFeatured) - Number(a.isFeatured) || (a.distanceKm ?? 0) - (b.distanceKm ?? 0) || b.ratingAvg - a.ratingAvg)
       .slice(0, 50);
@@ -77,7 +84,7 @@ export class MerchantsService {
   async publicProfile(merchantId: string) {
     const shop = await this.prisma.merchant.findFirst({ where: { id: merchantId, status: 'ACTIVE' }, select: PUBLIC_FIELDS });
     if (!shop) throw new NotFoundException('Shop not found');
-    return shop;
+    return featured(shop);
   }
 
   // ─── Shop owners ───

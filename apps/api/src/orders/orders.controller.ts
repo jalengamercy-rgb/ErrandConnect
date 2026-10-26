@@ -22,8 +22,8 @@ export class OrdersController {
   @HttpCode(200)
   @Roles('CUSTOMER')
   async quote(@CurrentUser() user: AuthUser, @Body() dto: OrderDetailsDto) {
-    const { quote, distanceKm, dropoff } = await this.orders.quote(user.id, dto);
-    return { quote, distanceKm, dropoff };
+    const { quote, distanceKm, dropoff, promo, plus } = await this.orders.quote(user.id, dto);
+    return { quote, distanceKm, dropoff, plus, promo: promo && { code: promo.code, discount: promo.discount, error: promo.error } };
   }
 
   @Post()

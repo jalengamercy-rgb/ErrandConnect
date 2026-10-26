@@ -32,6 +32,10 @@ import { RealtimeService } from '../realtime/realtime.service.js';
 import { DispatchService, jobStart } from '../realtime/dispatch.service.js';
 import { PaymentsService } from '../payments/payments.service.js';
 import { recalculateRunnerRating } from './ratings.js';
+import { PromoError, PromosService } from '../growth/promos.service.js';
+import { RewardsService } from '../growth/rewards.service.js';
+import { SubscriptionsService } from '../growth/subscriptions.service.js';
+import { SurgeService } from '../growth/surge.service.js';
 import { InboxService } from '../notifications/inbox.service.js';
 import type { CreateOrderDto, LocationDto, OrderDetailsDto, ReviewDto } from './orders.dto.js';
 
@@ -89,6 +93,10 @@ export class OrdersService {
     private readonly dispatch: DispatchService,
     private readonly payments: PaymentsService,
     private readonly inbox: InboxService,
+    private readonly surge: SurgeService,
+    private readonly subscriptions: SubscriptionsService,
+    private readonly promos: PromosService,
+    private readonly rewards: RewardsService,
   ) {}
 
   // ─── Pricing & creation (customers) ───
@@ -124,11 +132,35 @@ export class OrdersService {
     // Without a pickup point the runner starts near the customer; the base fee covers that.
     const distanceKm = pickup ? estimateRoadKm(pickup, dropoff) : 0;
     const config = await this.pricing.getConfig();
-    const quote = calculateQuote(
-      { itemsCost: dto.itemsCost ?? 0, errandFee: category.baseFee, distanceKm, deliveryType: dto.deliveryType, urgency: dto.urgency },
-      config,
-    );
-    return { category, dropoff, pickup, merchant, distanceKm, quote, config };
+    // Surge is measured where the runner starts the errand.
+    const surge = await this.surge.multiplierAt(pickup ?? dropoff, config.surge);
+    // Plus is a personal membership: company errands still pay the service fee.
+    const plus = !dto.businessId && (await this.subscriptions.isPlus(customerId));
+    const input = {
+      itemsCost: dto.itemsCost ?? 0,
+      errandFee: category.baseFee,
+      distanceKm,
+      deliveryType: dto.deliveryType,
+      urgency: dto.urgency,
+      surgeMultiplier: surge.multiplier,
+      waiveServiceFee: plus,
+    };
+    let quote = calculateQuote(input, config);
+
+    let promo: { code: string; discount: number; promoId?: string; error?: string } | null = null;
+    if (dto.promoCode?.trim()) {
+      const code = dto.promoCode.trim().toUpperCase();
+      try {
+        if (dto.businessId) throw new PromoError('Promo codes are for personal errands');
+        const result = await this.promos.evaluate(customerId, code, quote.customer.total, quote.customer.total - quote.customer.itemsCost);
+        quote = calculateQuote({ ...input, discount: result.discount }, config);
+        promo = { code, discount: quote.customer.discount, promoId: result.promo.id };
+      } catch (error) {
+        if (!(error instanceof PromoError)) throw error;
+        promo = { code, discount: 0, error: error.message };
+      }
+    }
+    return { category, dropoff, pickup, merchant, distanceKm, quote, config, promo, plus };
   }
 
   async create(customerId: string, dto: CreateOrderDto) {
@@ -140,7 +172,8 @@ export class OrdersService {
       throw new BadRequestException('Schedule between 15 minutes and 14 days from now');
     }
 
-    const { category, dropoff, pickup, merchant, distanceKm, quote, config } = await this.quote(customerId, dto);
+    const { category, dropoff, pickup, merchant, distanceKm, quote, config, promo } = await this.quote(customerId, dto);
+    if (promo?.error) throw new BadRequestException(promo.error);
     const method = dto.paymentMethod;
 
     // Company orders: the person must be a member of an active business.
@@ -212,12 +245,17 @@ export class OrdersService {
       deliveryFee: quote.customer.deliveryFee,
       urgencyFee: quote.customer.urgencyFee,
       serviceFee: quote.customer.serviceFee,
+      surgeFee: quote.customer.surgeFee,
+      discount: quote.customer.discount,
       total: quote.customer.total,
       runnerEarnings: quote.runner.total,
       platformFee: quote.platform.total,
       pricingSnapshot: { quote, config } as unknown as Prisma.InputJsonValue,
       paymentMethod: method,
       deliveryPin: randomDigits(4),
+      promoRedemption: promo?.promoId
+        ? { create: { promoId: promo.promoId, userId: customerId, amount: quote.customer.discount } }
+        : undefined,
     } satisfies Omit<Prisma.OrderUncheckedCreateInput, 'status'>;
 
     if (method === 'MPESA') {
@@ -491,6 +529,8 @@ export class OrdersService {
         itemsCost: o.itemsCost,
         runnerEarnings: o.runnerEarnings,
         runnerFee: o.runnerEarnings - o.itemsCost,
+        /** Extra the runner earns because demand is high here. */
+        surgeBonus: (o.pricingSnapshot as { quote?: { runner?: { surgeEarnings?: number } } } | null)?.quote?.runner?.surgeEarnings ?? 0,
         createdAt: o.createdAt,
       }));
   }
@@ -569,7 +609,7 @@ export class OrdersService {
     }
 
     const now = new Date();
-    await this.prisma.$transaction(async (tx) => {
+    const rewards = await this.prisma.$transaction(async (tx) => {
       const { count } = await tx.order.updateMany({
         where: { id: orderId, status: order.status },
         data: { status: 'COMPLETED', deliveredAt: now, completedAt: now },
@@ -585,8 +625,10 @@ export class OrdersService {
       if (order.paidAt) await this.payments.releaseEscrow(tx, order, runnerId);
       else await this.payments.chargeCashCommission(tx, order, runnerId);
       await this.payments.chargeMerchantCommission(tx, order);
+      return this.rewards.onOrderCompleted(tx, order);
     });
     this.dispatch.orderUpdated(orderId, order.customerId, runnerId, 'COMPLETED');
+    await this.rewards.notify(rewards);
     return this.getForViewer(orderId, { id: runnerId, staffRole: null });
   }
 

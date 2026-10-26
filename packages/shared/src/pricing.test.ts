@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { DELIVERY_TYPES, URGENCY_LEVELS } from './constants';
-import { calculateQuote, DEFAULT_PRICING_CONFIG, deliveryFeeFor, PricingError, serviceFeeFor, validatePricingConfig } from './pricing';
+import {
+  calculateQuote,
+  DEFAULT_PRICING_CONFIG,
+  deliveryFeeFor,
+  PricingError,
+  serviceFeeFor,
+  surgeMultiplierFor,
+  validatePricingConfig,
+  withPricingDefaults,
+} from './pricing';
 import { haversineKm } from './geo';
 
 describe('calculateQuote', () => {
@@ -14,7 +23,9 @@ describe('calculateQuote', () => {
       errandFee: 2000,
       deliveryFee: 200,
       urgencyFee: 0,
+      surgeFee: 0,
       serviceFee: 50,
+      discount: 0,
       total: 2250,
     });
     expect(quote.runner.errandEarnings).toBe(1700);
@@ -52,13 +63,41 @@ describe('calculateQuote', () => {
       for (const urgency of URGENCY_LEVELS) {
         for (const errandFee of [0, 1, 7, 333, 999, 1000, 4999, 5000, 12345]) {
           for (const distanceKm of [0, 0.3, 1.99, 2, 2.01, 7.77, 42]) {
-            const q = calculateQuote({ itemsCost: 17, errandFee, distanceKm, deliveryType, urgency });
-            expect(q.customer.total).toBe(q.runner.total + q.platform.total);
-            expect(Number.isInteger(q.customer.total)).toBe(true);
+            for (const extras of [{}, { surgeMultiplier: 1.7, discount: 150 }, { waiveServiceFee: true, discount: 100_000 }]) {
+              const q = calculateQuote({ itemsCost: 17, errandFee, distanceKm, deliveryType, urgency, ...extras });
+              expect(q.customer.total).toBe(q.runner.total + q.platform.total);
+              expect(Number.isInteger(q.customer.total)).toBe(true);
+              expect(q.customer.total).toBeGreaterThanOrEqual(q.runner.total);
+            }
           }
         }
       }
     }
+  });
+
+  it('adds a surge fee on the delivery fee, mostly for the runner', () => {
+    const quote = calculateQuote({ errandFee: 500, distanceKm: 2, deliveryType: 'MOTORCYCLE', surgeMultiplier: 1.5 });
+    expect(quote.customer.surgeFee).toBe(100);
+    expect(quote.runner.surgeEarnings).toBe(80);
+    expect(quote.platform.surgeMargin).toBe(20);
+    expect(quote.surgeMultiplier).toBe(1.5);
+  });
+
+  it('waives the service fee for Plus members', () => {
+    const quote = calculateQuote({ errandFee: 500, distanceKm: 2, deliveryType: 'MOTORCYCLE', waiveServiceFee: true });
+    expect(quote.customer.serviceFee).toBe(0);
+    expect(quote.platform.serviceFee).toBe(0);
+  });
+
+  it('takes discounts from the platform share, never the runner', () => {
+    const plain = calculateQuote({ errandFee: 500, distanceKm: 2, deliveryType: 'MOTORCYCLE' });
+    const discounted = calculateQuote({ errandFee: 500, distanceKm: 2, deliveryType: 'MOTORCYCLE', discount: 100 });
+    expect(discounted.customer.total).toBe(plain.customer.total - 100);
+    expect(discounted.runner.total).toBe(plain.runner.total);
+    expect(discounted.platform.total).toBe(plain.platform.total - 100);
+    // A discount bigger than the order is capped at what the runner is owed.
+    const huge = calculateQuote({ errandFee: 500, distanceKm: 2, deliveryType: 'MOTORCYCLE', discount: 10_000 });
+    expect(huge.customer.total).toBe(huge.runner.total);
   });
 
   it('rejects invalid input', () => {
@@ -68,6 +107,34 @@ describe('calculateQuote', () => {
     expect(() =>
       calculateQuote({ errandFee: 100, distanceKm: 1, deliveryType: 'CAR' }, { ...DEFAULT_PRICING_CONFIG, commissionRate: 1.5 }),
     ).toThrow(PricingError);
+  });
+});
+
+describe('surgeMultiplierFor', () => {
+  const surge = { ...DEFAULT_PRICING_CONFIG.surge, enabled: true };
+  it('stays at 1 while runners keep up', () => {
+    expect(surgeMultiplierFor(0, 0, surge)).toBe(1);
+    expect(surgeMultiplierFor(3, 5, surge)).toBe(1);
+    expect(surgeMultiplierFor(5, 5, surge)).toBe(1);
+  });
+  it('rises with demand and stops at the maximum', () => {
+    expect(surgeMultiplierFor(10, 5, surge)).toBe(1.3);
+    expect(surgeMultiplierFor(3, 0, surge)).toBe(2);
+    expect(surgeMultiplierFor(100, 1, surge)).toBe(2);
+  });
+  it('uses the manual multiplier as a floor, and nothing when disabled', () => {
+    expect(surgeMultiplierFor(0, 5, { ...surge, manualMultiplier: 1.5 })).toBe(1.5);
+    expect(surgeMultiplierFor(100, 1, { ...surge, enabled: false })).toBe(1);
+  });
+});
+
+describe('withPricingDefaults', () => {
+  it('adds surge settings to configs saved before surge existed', () => {
+    const { surge: _surge, ...old } = DEFAULT_PRICING_CONFIG;
+    expect(withPricingDefaults({ ...old, commissionRate: 0.2 })).toMatchObject({
+      commissionRate: 0.2,
+      surge: DEFAULT_PRICING_CONFIG.surge,
+    });
   });
 });
 
@@ -119,5 +186,11 @@ describe('validatePricingConfig', () => {
       'serviceFeeTiers[2].below must be null (no upper limit)',
     ]);
     expect(validatePricingConfig(null)).toEqual(['Pricing must be an object']);
+    expect(
+      validatePricingConfig({
+        ...DEFAULT_PRICING_CONFIG,
+        surge: { ...DEFAULT_PRICING_CONFIG.surge, maxMultiplier: 1.5, manualMultiplier: 2 },
+      }),
+    ).toEqual(['surge.manualMultiplier cannot be above surge.maxMultiplier']);
   });
 });

@@ -18,6 +18,15 @@ import { WithdrawalsService } from './withdrawals.service.js';
 
 type Tx = Prisma.TransactionClient;
 
+/** Books a confirmed M-Pesa payment for an ErrandCONNECT Plus subscription. */
+export type SubscriptionSettler = (
+  tx: Tx,
+  subscriptionId: string,
+  amount: number,
+  receipt: string,
+  checkoutRequestId: string,
+) => Promise<void>;
+
 /** Wait this long before sending another payment prompt for the same order. */
 const STK_RESEND_COOLDOWN_MS = 30_000;
 
@@ -33,6 +42,7 @@ const STK_RESEND_COOLDOWN_MS = 30_000;
 @Injectable()
 export class PaymentsService implements OnModuleInit {
   private readonly logger = new Logger(PaymentsService.name);
+  private subscriptionSettler?: SubscriptionSettler;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -81,6 +91,11 @@ export class PaymentsService implements OnModuleInit {
   }
 
   /** Safaricom's answer to an STK push. Safe to receive more than once. */
+  /** The growth module registers how Plus payments are booked (it depends on payments, not the other way round). */
+  setSubscriptionSettler(settler: SubscriptionSettler) {
+    this.subscriptionSettler = settler;
+  }
+
   async handleStkCallback(body: unknown) {
     const result = parseStkCallback(body);
     if (!result) {
@@ -97,6 +112,7 @@ export class PaymentsService implements OnModuleInit {
     });
     if (!payment || payment.status !== 'PENDING') return;
     if (payment.invoice) return this.settleInvoiceStk(payment.id, payment.invoice, result, raw);
+    if (payment.subscriptionId) return this.settleSubscriptionStk(payment.id, payment.subscriptionId, payment.amount, result, raw);
     const order = payment.order;
 
     if (result.resultCode !== 0) {
@@ -272,7 +288,7 @@ export class PaymentsService implements OnModuleInit {
       this.ledger.systemWallet(tx, 'PLATFORM_REVENUE'),
     ]);
     await this.ledger.post(tx, {
-      type: 'ADJUSTMENT',
+      type: 'MERCHANT_COMMISSION',
       description: `Commission on ${order.orderNumber}`,
       orderId: order.id,
       idempotencyKey: `merchant-fee:${order.id}`,
@@ -302,10 +318,19 @@ export class PaymentsService implements OnModuleInit {
       ],
     });
     if (amount >= invoice.amount) {
-      await tx.invoice.updateMany({
+      const { count } = await tx.invoice.updateMany({
         where: { id: invoice.id, status: 'ISSUED' },
         data: { status: 'PAID', paidAt: new Date(), paymentReference: reference },
       });
+      // A paid featured listing starts now, or extends a current one.
+      if (count === 1 && invoice.kind === 'FEATURED_LISTING' && invoice.merchantId && invoice.featuredWeeks) {
+        const merchant = await tx.merchant.findUniqueOrThrow({ where: { id: invoice.merchantId } });
+        const from = Math.max(Date.now(), merchant.featuredUntil?.getTime() ?? 0);
+        await tx.merchant.update({
+          where: { id: merchant.id },
+          data: { featuredUntil: new Date(from + invoice.featuredWeeks * 7 * 86_400_000) },
+        });
+      }
     }
   }
 
@@ -329,6 +354,35 @@ export class PaymentsService implements OnModuleInit {
       });
       if (count === 0) return;
       await this.creditInvoice(tx, invoice, result.amount ?? payment.amount, result.receipt ?? '', `stk:${result.checkoutRequestId}`);
+    });
+  }
+
+  private async settleSubscriptionStk(
+    paymentId: string,
+    subscriptionId: string,
+    requested: number,
+    result: StkCallbackResult,
+    raw: unknown,
+  ) {
+    if (result.resultCode !== 0) {
+      await this.prisma.payment.updateMany({
+        where: { id: paymentId, status: 'PENDING' },
+        data: {
+          status: result.resultCode === 1032 ? 'CANCELLED' : 'FAILED',
+          failureReason: result.resultDesc,
+          rawCallback: raw as Prisma.InputJsonValue,
+        },
+      });
+      return;
+    }
+    if (!this.subscriptionSettler) throw new Error('No subscription settler registered');
+    await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.payment.updateMany({
+        where: { id: paymentId, status: 'PENDING' },
+        data: { status: 'SUCCEEDED', providerReceipt: result.receipt, rawCallback: raw as Prisma.InputJsonValue },
+      });
+      if (count === 0) return;
+      await this.subscriptionSettler!(tx, subscriptionId, result.amount ?? requested, result.receipt ?? '', result.checkoutRequestId);
     });
   }
 
@@ -413,7 +467,7 @@ export class PaymentsService implements OnModuleInit {
       this.ledger.userWallet(tx, order.customerId, 'CUSTOMER'),
     ]);
     await this.ledger.post(tx, {
-      type: 'ADJUSTMENT',
+      type: 'BONUS',
       description: reason,
       orderId: order.id,
       entries: [

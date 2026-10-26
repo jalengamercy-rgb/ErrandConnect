@@ -4,6 +4,7 @@ import type { AuthUser } from '../common/auth-user.js';
 import { AuditService } from '../common/audit.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { InboxService } from '../notifications/inbox.service.js';
+import { RewardsService } from '../growth/rewards.service.js';
 import { PaymentsService } from '../payments/payments.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { DispatchService } from '../realtime/dispatch.service.js';
@@ -24,6 +25,7 @@ export class DisputesService {
     private readonly dispatch: DispatchService,
     private readonly inbox: InboxService,
     private readonly audit: AuditService,
+    private readonly rewards: RewardsService,
   ) {}
 
   async raise(orderId: string, userId: string, dto: RaiseDisputeDto) {
@@ -112,6 +114,7 @@ export class DisputesService {
     if (dto.refundAmount && dto.refundAmount > order.total) throw new BadRequestException('Refund cannot be more than the order total');
 
     let finalStatus = dispute.previousOrderStatus;
+    let rewards: Awaited<ReturnType<RewardsService['onOrderCompleted']>> = [];
     await this.prisma.$transaction(async (tx) => {
       if (dto.outcome === 'REFUND_CUSTOMER' && escrowOnHold) {
         await this.payments.refundEscrow(tx, order, { includeOnHold: true });
@@ -122,6 +125,7 @@ export class DisputesService {
         if (!order.runnerId) throw new BadRequestException('No runner to pay on this order');
         await this.payments.releaseEscrow(tx, order, order.runnerId, { includeOnHold: true });
         await this.payments.chargeMerchantCommission(tx, order);
+        rewards = await this.rewards.onOrderCompleted(tx, order);
         finalStatus = 'COMPLETED';
       } else if (escrowOnHold) {
         await tx.escrow.update({ where: { orderId: order.id }, data: { status: 'HELD' } });
@@ -168,6 +172,7 @@ export class DisputesService {
       body: dto.resolution,
       link: `/orders/${order.id}`,
     });
+    await this.rewards.notify(rewards);
     return this.get(id);
   }
 }

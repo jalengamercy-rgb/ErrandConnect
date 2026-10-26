@@ -4,9 +4,23 @@ import { AuditService } from '../common/audit.service.js';
 import type { AuthUser } from '../common/auth-user.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import { InboxService } from '../notifications/inbox.service.js';
+import { LedgerService } from '../payments/ledger.service.js';
 import { PaymentsService } from '../payments/payments.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { GenerateInvoiceDto, InvoiceListQueryDto } from './invoices.dto.js';
+
+/** INV-YYYYMM-0001, numbered per month. */
+export async function nextInvoiceNumber(tx: Prisma.TransactionClient) {
+  const now = new Date();
+  const prefix = `INV-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}-`;
+  const last = await tx.invoice.findFirst({
+    where: { number: { startsWith: prefix } },
+    orderBy: { number: 'desc' },
+    select: { number: true },
+  });
+  const next = last ? Number(last.number.slice(prefix.length)) + 1 : 1;
+  return `${prefix}${String(next).padStart(4, '0')}`;
+}
 
 const ORDER_LINE = {
   select: { id: true, orderNumber: true, description: true, total: true, merchantCommission: true, completedAt: true },
@@ -17,6 +31,7 @@ export class InvoicesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly payments: PaymentsService,
+    private readonly ledger: LedgerService,
     private readonly inbox: InboxService,
     private readonly audit: AuditService,
   ) {}
@@ -110,7 +125,8 @@ export class InvoicesService {
 
       const created = await tx.invoice.create({
         data: {
-          number: await this.nextNumber(tx),
+          number: await nextInvoiceNumber(tx),
+          kind: dto.businessId ? 'ORDERS' : 'COMMISSION',
           businessId: dto.businessId,
           merchantId: dto.merchantId,
           periodStart,
@@ -159,24 +175,28 @@ export class InvoicesService {
     await this.prisma.$transaction(async (tx) => {
       const { count } = await tx.invoice.updateMany({ where: { id, status: 'ISSUED' }, data: { status: 'VOID' } });
       if (count === 0) throw new ConflictException('Only unpaid invoices can be voided');
+      const invoice = await tx.invoice.findUniqueOrThrow({ where: { id } });
+      // A featured listing is charged when ordered; voiding takes the charge back.
+      if (invoice.kind === 'FEATURED_LISTING' && invoice.merchantId) {
+        const [merchant, platform] = await Promise.all([
+          this.ledger.orgWallet(tx, 'MERCHANT', invoice.merchantId),
+          this.ledger.systemWallet(tx, 'PLATFORM_REVENUE'),
+        ]);
+        await this.ledger.post(tx, {
+          type: 'FEATURED_LISTING',
+          description: `Cancelled featured listing ${invoice.number}`,
+          idempotencyKey: `featured-void:${id}`,
+          entries: [
+            { walletId: platform.id, amount: -invoice.amount },
+            { walletId: merchant.id, amount: invoice.amount },
+          ],
+        });
+      }
       await tx.order.updateMany({ where: { invoiceId: id }, data: { invoiceId: null } });
       await tx.order.updateMany({ where: { merchantInvoiceId: id }, data: { merchantInvoiceId: null } });
       await this.audit.log({ actorId: admin.id, action: 'invoice.void', entityType: 'invoice', entityId: id, metadata: { reason } }, tx);
     });
     return this.get(id);
-  }
-
-  /** INV-YYYYMM-0001, numbered per month. */
-  private async nextNumber(tx: Prisma.TransactionClient) {
-    const now = new Date();
-    const prefix = `INV-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}-`;
-    const last = await tx.invoice.findFirst({
-      where: { number: { startsWith: prefix } },
-      orderBy: { number: 'desc' },
-      select: { number: true },
-    });
-    const next = last ? Number(last.number.slice(prefix.length)) + 1 : 1;
-    return `${prefix}${String(next).padStart(4, '0')}`;
   }
 
   private async notifyOwner(invoice: { businessId: string | null; merchantId: string | null }, title: string, body: string) {
