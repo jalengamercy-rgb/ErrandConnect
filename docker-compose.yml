@@ -1,0 +1,20 @@
+# Local development services. Run: docker compose up -d
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: errand
+      POSTGRES_PASSWORD: errand
+      POSTGRES_DB: errandconnect
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:

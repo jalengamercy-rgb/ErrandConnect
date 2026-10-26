@@ -1,0 +1,930 @@
+// ErrandCONNECT database schema.
+// See docs/DATA-MODEL.md for a plain-English tour of these tables.
+//
+// Conventions:
+//   - All money is whole Kenyan shillings stored as Int (M-Pesa only uses whole shillings).
+//   - Locations are latitude/longitude pairs (PostGIS geography columns come in Phase 2).
+//   - Tables use snake_case names in the database; models use PascalCase in code.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────────────────────── Identity ─────────────────────────────
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  BLOCKED
+  DELETED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+/// One row per person. Their roles (customer, runner, staff, business member)
+/// live in separate profile tables so one phone number = one account.
+model User {
+  id       String  @id @default(uuid())
+  /// E.164 format, e.g. +254712345678. The main login identifier.
+  phone    String  @unique
+  email    String? @unique
+  whatsapp String?
+  altPhone String? @map("alt_phone")
+
+  firstName   String    @map("first_name")
+  middleName  String?   @map("middle_name")
+  lastName    String    @map("last_name")
+  dateOfBirth DateTime? @map("date_of_birth") @db.Date
+  gender      Gender?
+  nationality String?
+  photoUrl    String?   @map("photo_url")
+
+  passwordHash String? @map("password_hash")
+  /// 4-digit security PIN, hashed like a password.
+  pinHash      String? @map("pin_hash")
+
+  phoneVerifiedAt DateTime? @map("phone_verified_at")
+  emailVerifiedAt DateTime? @map("email_verified_at")
+  idVerifiedAt    DateTime? @map("id_verified_at")
+
+  status       AccountStatus @default(ACTIVE)
+  /// Unique code this user shares to refer others.
+  referralCode String        @unique @map("referral_code")
+  referredById String?       @map("referred_by_id")
+  referredBy   User?         @relation("Referrals", fields: [referredById], references: [id])
+  referrals    User[]        @relation("Referrals")
+  lastLoginAt  DateTime?     @map("last_login_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  customerProfile   CustomerProfile?
+  runnerProfile     RunnerProfile?
+  staffProfile      StaffProfile?
+  businessMembers   BusinessMember[]
+  merchantMembers   MerchantMember[]
+  addresses         Address[]
+  documents         Document[]         @relation("DocumentOwner")
+  reviewedDocuments Document[]         @relation("DocumentReviewer")
+  emergencyContacts EmergencyContact[]
+  payoutMethods     PayoutMethod[]
+  consents          Consent[]
+  wallets           Wallet[]
+  sessions          Session[]
+  ordersAsCustomer  Order[]            @relation("CustomerOrders")
+  ordersAsRunner    Order[]            @relation("RunnerOrders")
+  orderEvents       OrderEvent[]
+  reviewsGiven      Review[]           @relation("ReviewAuthor")
+  reviewsReceived   Review[]           @relation("ReviewSubject")
+  auditLogs         AuditLog[]
+
+  @@map("users")
+}
+
+enum OtpPurpose {
+  LOGIN
+  REGISTER
+  RESET_PASSWORD
+  VERIFY_EMAIL
+}
+
+/// One-time codes sent by SMS or email. Only a hash of the code is stored.
+model OtpCode {
+  id          String     @id @default(uuid())
+  /// Phone number or email the code was sent to.
+  destination String
+  purpose     OtpPurpose
+  codeHash    String     @map("code_hash")
+  attempts    Int        @default(0)
+  expiresAt   DateTime   @map("expires_at")
+  consumedAt  DateTime?  @map("consumed_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+
+  @@index([destination, purpose])
+  @@map("otp_codes")
+}
+
+/// Logged-in devices. Lets users (and admins) sign out a lost phone.
+model Session {
+  id               String    @id @default(uuid())
+  userId           String    @map("user_id")
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash String    @unique @map("refresh_token_hash")
+  deviceName       String?   @map("device_name")
+  ipAddress        String?   @map("ip_address")
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+enum ConsentType {
+  TERMS
+  PRIVACY_POLICY
+  GPS_TRACKING
+  MARKETING
+  COMMISSION_RATES
+  INFO_IS_TRUE
+  BACKGROUND_CHECK
+}
+
+/// Record of what each user agreed to, which document version, and when.
+/// Required evidence under Kenya's Data Protection Act 2019.
+model Consent {
+  id        String      @id @default(uuid())
+  userId    String      @map("user_id")
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      ConsentType
+  version   String
+  granted   Boolean
+  ipAddress String?     @map("ip_address")
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  @@index([userId, type])
+  @@map("consents")
+}
+
+model EmergencyContact {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName     String   @map("full_name")
+  relationship String
+  phone        String
+  altPhone     String?  @map("alt_phone")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("emergency_contacts")
+}
+
+// ───────────────────────────── Addresses ─────────────────────────────
+
+/// Saved places (Home, Work, Parents...) for users, businesses and merchants.
+model Address {
+  id         String    @id @default(uuid())
+  userId     String?   @map("user_id")
+  user       User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessId String?   @map("business_id")
+  business   Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  label      String // "Home", "Office", "Parents"...
+  country    String  @default("Kenya")
+  county     String?
+  city       String?
+  area       String? // Estate / neighbourhood
+  street     String?
+  building   String?
+  unit       String? // House / apartment number
+  postalCode String? @map("postal_code")
+  notes      String? // Directions for the runner
+  lat        Float
+  lng        Float
+  isDefault  Boolean @default(false) @map("is_default")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([businessId])
+  @@map("addresses")
+}
+
+// ───────────────────────────── Customers ─────────────────────────────
+
+model CustomerProfile {
+  userId       String @id @map("user_id")
+  user         User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Short human-friendly ID shown in the app, e.g. EC-C-104233.
+  customerCode String @unique @map("customer_code")
+
+  /// 1 = phone verified, 2 = email verified, 3 = ID verified.
+  verificationLevel  Int      @default(1) @map("verification_level")
+  favoriteCategories String[] @map("favorite_categories")
+  notifySms          Boolean  @default(true) @map("notify_sms")
+  notifyEmail        Boolean  @default(true) @map("notify_email")
+  notifyPush         Boolean  @default(true) @map("notify_push")
+  notifyWhatsapp     Boolean  @default(false) @map("notify_whatsapp")
+  language           String   @default("en")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("customer_profiles")
+}
+
+// ───────────────────────────── Runners ─────────────────────────────
+
+enum DeliveryType {
+  WALKING
+  BICYCLE
+  MOTORCYCLE
+  CAR
+  VAN
+  PICKUP
+  TRUCK
+}
+
+enum RunnerApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum Availability {
+  FULL_TIME
+  PART_TIME
+  WEEKENDS
+  NIGHTS
+  ANYTIME
+}
+
+enum Weekday {
+  MON
+  TUE
+  WED
+  THU
+  FRI
+  SAT
+  SUN
+}
+
+model RunnerProfile {
+  userId     String @id @map("user_id")
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  runnerCode String @unique @map("runner_code")
+
+  nationalIdNumber String? @map("national_id_number")
+  kraPin           String? @map("kra_pin")
+
+  // Step 2: service area
+  county         String?
+  city           String?
+  area           String?
+  preferredAreas String[] @map("preferred_areas")
+
+  // Step 3 & 8 & 9: how and when they work
+  deliveryTypes   DeliveryType[] @map("delivery_types")
+  availability    Availability?
+  workingDays     Weekday[]      @map("working_days")
+  /// "HH:MM" 24-hour local time.
+  workStartTime   String?        @map("work_start_time")
+  workEndTime     String?        @map("work_end_time")
+  /// null = no limit.
+  maxDistanceKm   Int?           @map("max_distance_km")
+  /// ServiceCategory slugs the runner accepts.
+  servicesOffered String[]       @map("services_offered")
+
+  // Step 10-12: experience, equipment, skills
+  hasDeliveryExperience Boolean? @map("has_delivery_experience")
+  previousCompany       String?  @map("previous_company")
+  yearsExperience       Int?     @map("years_experience")
+  avgDeliveriesPerDay   Int?     @map("avg_deliveries_per_day")
+  equipment             String[]
+  skills                String[]
+  languages             String[]
+
+  // Step 13: background questions
+  hasCriminalRecord   Boolean? @map("has_criminal_record")
+  canLiftHeavy        Boolean? @map("can_lift_heavy")
+  willingToHandleCash Boolean? @map("willing_to_handle_cash")
+
+  // Onboarding progress and admin verification tracker
+  onboardingStep      Int                     @default(1) @map("onboarding_step")
+  applicationStatus   RunnerApplicationStatus @default(DRAFT) @map("application_status")
+  submittedAt         DateTime?               @map("submitted_at")
+  identityVerifiedAt  DateTime?               @map("identity_verified_at")
+  vehicleVerifiedAt   DateTime?               @map("vehicle_verified_at")
+  backgroundCheckedAt DateTime?               @map("background_checked_at")
+  payoutApprovedAt    DateTime?               @map("payout_approved_at")
+  approvedAt          DateTime?               @map("approved_at")
+  rejectionReason     String?                 @map("rejection_reason")
+
+  // Live state
+  isOnline   Boolean   @default(false) @map("is_online")
+  lastLat    Float?    @map("last_lat")
+  lastLng    Float?    @map("last_lng")
+  lastSeenAt DateTime? @map("last_seen_at")
+
+  // Stats (kept up to date when orders complete / reviews arrive)
+  ratingAvg     Float @default(0) @map("rating_avg")
+  ratingCount   Int   @default(0) @map("rating_count")
+  jobsCompleted Int   @default(0) @map("jobs_completed")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  vehicles Vehicle[]
+
+  @@index([applicationStatus])
+  @@index([isOnline])
+  @@map("runner_profiles")
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+model Vehicle {
+  id       String        @id @default(uuid())
+  runnerId String        @map("runner_id")
+  runner   RunnerProfile @relation(fields: [runnerId], references: [userId], onDelete: Cascade)
+
+  type               DeliveryType
+  make               String?
+  model              String?
+  color              String?
+  registrationNumber String?      @map("registration_number")
+  year               Int?
+  photoUrl           String?      @map("photo_url")
+  licenceNumber      String?      @map("licence_number")
+  licenceExpiry      DateTime?    @map("licence_expiry") @db.Date
+  insuranceNumber    String?      @map("insurance_number")
+  insuranceExpiry    DateTime?    @map("insurance_expiry") @db.Date
+  status             ReviewStatus @default(PENDING)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([registrationNumber])
+  @@map("vehicles")
+}
+
+enum DocumentType {
+  NATIONAL_ID_FRONT
+  NATIONAL_ID_BACK
+  PASSPORT
+  SELFIE
+  SELFIE_WITH_ID
+  DRIVING_LICENCE
+  INSURANCE
+  POLICE_CLEARANCE
+  KRA_PIN
+  VEHICLE_PHOTO
+  BUSINESS_REGISTRATION
+  OTHER
+}
+
+/// Uploaded files (IDs, licences...). The file itself lives in object storage;
+/// this row stores where, and the admin review outcome.
+model Document {
+  id              String       @id @default(uuid())
+  ownerId         String       @map("owner_id")
+  owner           User         @relation("DocumentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  type            DocumentType
+  /// Key in object storage (not a public URL - files are private).
+  storageKey      String       @map("storage_key")
+  mimeType        String       @map("mime_type")
+  status          ReviewStatus @default(PENDING)
+  reviewedById    String?      @map("reviewed_by_id")
+  reviewedBy      User?        @relation("DocumentReviewer", fields: [reviewedById], references: [id])
+  reviewedAt      DateTime?    @map("reviewed_at")
+  rejectionReason String?      @map("rejection_reason")
+  expiresAt       DateTime?    @map("expires_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([ownerId, type])
+  @@index([status])
+  @@map("documents")
+}
+
+enum PayoutMethodType {
+  MPESA
+  BANK
+  MOBILE_WALLET
+}
+
+/// Where a runner or merchant receives their money.
+model PayoutMethod {
+  id            String           @id @default(uuid())
+  userId        String           @map("user_id")
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type          PayoutMethodType
+  accountName   String           @map("account_name")
+  /// M-Pesa / mobile wallet phone number.
+  phone         String?
+  bankName      String?          @map("bank_name")
+  accountNumber String?          @map("account_number")
+  branch        String?
+  isDefault     Boolean          @default(false) @map("is_default")
+  status        ReviewStatus     @default(PENDING)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("payout_methods")
+}
+
+// ───────────────────────────── Staff (admin panel) ─────────────────────────────
+
+enum StaffRole {
+  SUPER_ADMIN
+  OPERATIONS_MANAGER
+  FINANCE_MANAGER
+  CUSTOMER_SUPPORT
+  MERCHANT_MANAGER
+  RUNNER_MANAGER
+  MARKETING_MANAGER
+  CONTENT_MANAGER
+}
+
+model StaffProfile {
+  userId          String    @id @map("user_id")
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role            StaffRole
+  twoFactorSecret String?   @map("two_factor_secret")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@map("staff_profiles")
+}
+
+/// Every important admin or system action, for the Activity Logs screen.
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?  @map("actor_id")
+  actor      User?    @relation(fields: [actorId], references: [id])
+  /// e.g. "runner.approve", "order.refund", "settings.commission.update"
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id")
+  /// Before/after values or other details.
+  metadata   Json?
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+/// Admin-editable settings such as pricing, stored as JSON by key
+/// (e.g. key "pricing" holds a PricingConfig from @errandconnect/shared).
+model PlatformSetting {
+  key         String   @id
+  value       Json
+  updatedById String?  @map("updated_by_id")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("platform_settings")
+}
+
+// ───────────────────────────── Businesses & merchants ─────────────────────────────
+
+enum CompanySize {
+  SIZE_1_10
+  SIZE_11_50
+  SIZE_51_200
+  SIZE_200_PLUS
+}
+
+enum OrgStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
+/// A company that orders errands (Business Client account).
+model Business {
+  id                 String       @id @default(uuid())
+  name               String
+  businessType       String?      @map("business_type")
+  industry           String?
+  registrationNumber String?      @map("registration_number")
+  kraPin             String?      @map("kra_pin")
+  vatNumber          String?      @map("vat_number")
+  yearsInBusiness    Int?         @map("years_in_business")
+  companySize        CompanySize? @map("company_size")
+  estMonthlyOrders   String?      @map("est_monthly_orders")
+  servicesNeeded     String[]     @map("services_needed")
+  billingEmail       String?      @map("billing_email")
+  /// Approved by admin; 0 = must prepay.
+  creditLimit        Int          @default(0) @map("credit_limit")
+  monthlyInvoicing   Boolean      @default(false) @map("monthly_invoicing")
+  /// Requested extras: DEDICATED_RUNNER, PRIORITY, SCHEDULED_PICKUPS, ...
+  requestedFeatures  String[]     @map("requested_features")
+  status             OrgStatus    @default(PENDING)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  members   BusinessMember[]
+  addresses Address[]
+  wallets   Wallet[]
+  orders    Order[]
+
+  @@map("businesses")
+}
+
+enum OrgMemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model BusinessMember {
+  businessId    String        @map("business_id")
+  business      Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId        String        @map("user_id")
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role          OrgMemberRole @default(MEMBER)
+  position      String?
+  /// Orders by this member above this amount need approval (approval workflow).
+  approvalLimit Int?          @map("approval_limit")
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  @@id([businessId, userId])
+  @@map("business_members")
+}
+
+/// A shop/restaurant/pharmacy listed on the platform.
+model Merchant {
+  id                 String    @id @default(uuid())
+  name               String
+  logoUrl            String?   @map("logo_url")
+  categorySlug       String    @map("category_slug")
+  phone              String?
+  email              String?
+  addressLine        String?   @map("address_line")
+  lat                Float?
+  lng                Float?
+  registrationNumber String?   @map("registration_number")
+  taxNumber          String?   @map("tax_number")
+  /// Overrides the default merchant commission if set (0-1).
+  commissionRate     Float?    @map("commission_rate")
+  isFeatured         Boolean   @default(false) @map("is_featured")
+  status             OrgStatus @default(PENDING)
+  ratingAvg          Float     @default(0) @map("rating_avg")
+  ratingCount        Int       @default(0) @map("rating_count")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  members MerchantMember[]
+  wallets Wallet[]
+  orders  Order[]
+  reviews Review[]
+
+  @@map("merchants")
+}
+
+model MerchantMember {
+  merchantId String        @map("merchant_id")
+  merchant   Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  userId     String        @map("user_id")
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       OrgMemberRole @default(MEMBER)
+  createdAt  DateTime      @default(now()) @map("created_at")
+
+  @@id([merchantId, userId])
+  @@map("merchant_members")
+}
+
+// ───────────────────────────── Orders ─────────────────────────────
+
+/// Types of errand: Grocery Shopping, Medicine Pickup, Queueing...
+model ServiceCategory {
+  slug      String  @id
+  name      String
+  icon      String?
+  isActive  Boolean @default(true) @map("is_active")
+  sortOrder Int     @default(0) @map("sort_order")
+
+  orders Order[]
+
+  @@map("service_categories")
+}
+
+enum OrderStatus {
+  PENDING
+  ACCEPTED
+  RUNNER_ASSIGNED
+  AT_STORE
+  PICKED_UP
+  IN_TRANSIT
+  DELIVERED
+  COMPLETED
+  CANCELLED
+  REFUNDED
+  DISPUTED
+}
+
+enum Urgency {
+  STANDARD
+  WITHIN_1_HOUR
+  WITHIN_30_MIN
+  WITHIN_15_MIN
+}
+
+enum PaymentMethod {
+  MPESA
+  AIRTEL_MONEY
+  CARD
+  WALLET
+  BUSINESS_INVOICE
+  CASH
+}
+
+model Order {
+  id          String @id @default(uuid())
+  /// Human-friendly number shown to users, e.g. EC-20261026-0042.
+  orderNumber String @unique @map("order_number")
+
+  customerId String    @map("customer_id")
+  customer   User      @relation("CustomerOrders", fields: [customerId], references: [id])
+  businessId String?   @map("business_id")
+  business   Business? @relation(fields: [businessId], references: [id])
+  runnerId   String?   @map("runner_id")
+  runner     User?     @relation("RunnerOrders", fields: [runnerId], references: [id])
+  merchantId String?   @map("merchant_id")
+  merchant   Merchant? @relation(fields: [merchantId], references: [id])
+
+  categorySlug String          @map("category_slug")
+  category     ServiceCategory @relation(fields: [categorySlug], references: [slug])
+  description  String
+  deliveryType DeliveryType    @map("delivery_type")
+  urgency      Urgency         @default(STANDARD)
+  scheduledFor DateTime?       @map("scheduled_for")
+  status       OrderStatus     @default(PENDING)
+
+  // Pickup and drop-off are copied from the address at order time, so later
+  // edits to a saved address never change where a past order went.
+  pickupLabel    String? @map("pickup_label")
+  pickupAddress  String? @map("pickup_address")
+  pickupLat      Float?  @map("pickup_lat")
+  pickupLng      Float?  @map("pickup_lng")
+  dropoffLabel   String? @map("dropoff_label")
+  dropoffAddress String  @map("dropoff_address")
+  dropoffLat     Float   @map("dropoff_lat")
+  dropoffLng     Float   @map("dropoff_lng")
+  recipientName  String? @map("recipient_name")
+  recipientPhone String? @map("recipient_phone")
+  distanceKm     Float   @map("distance_km")
+
+  // Price breakdown (from calculateQuote in @errandconnect/shared)
+  itemsCost       Int  @map("items_cost")
+  errandFee       Int  @map("errand_fee")
+  deliveryFee     Int  @map("delivery_fee")
+  urgencyFee      Int  @map("urgency_fee")
+  serviceFee      Int  @map("service_fee")
+  discount        Int  @default(0)
+  total           Int
+  runnerEarnings  Int  @map("runner_earnings")
+  platformFee     Int  @map("platform_fee")
+  /// Full quote + pricing config used, so the price can always be explained later.
+  pricingSnapshot Json @map("pricing_snapshot")
+
+  paymentMethod   PaymentMethod @map("payment_method")
+  /// Customer gives this PIN to the runner on delivery; it releases escrow.
+  deliveryPinHash String?       @map("delivery_pin_hash")
+
+  acceptedAt   DateTime? @map("accepted_at")
+  pickedUpAt   DateTime? @map("picked_up_at")
+  deliveredAt  DateTime? @map("delivered_at")
+  completedAt  DateTime? @map("completed_at")
+  cancelledAt  DateTime? @map("cancelled_at")
+  cancelReason String?   @map("cancel_reason")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  events             OrderEvent[]
+  payments           Payment[]
+  escrow             Escrow?
+  reviews            Review[]
+  ledgerTransactions LedgerTransaction[]
+
+  @@index([customerId, createdAt])
+  @@index([runnerId, createdAt])
+  @@index([status])
+  @@map("orders")
+}
+
+/// Timeline of everything that happened to an order (status changes, notes).
+model OrderEvent {
+  id        String      @id @default(uuid())
+  orderId   String      @map("order_id")
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    OrderStatus
+  actorId   String?     @map("actor_id")
+  actor     User?       @relation(fields: [actorId], references: [id])
+  note      String?
+  lat       Float?
+  lng       Float?
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  @@index([orderId, createdAt])
+  @@map("order_events")
+}
+
+model Review {
+  id         String    @id @default(uuid())
+  orderId    String    @map("order_id")
+  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  authorId   String    @map("author_id")
+  author     User      @relation("ReviewAuthor", fields: [authorId], references: [id])
+  /// The runner or customer being rated (null when rating a merchant).
+  subjectId  String?   @map("subject_id")
+  subject    User?     @relation("ReviewSubject", fields: [subjectId], references: [id])
+  merchantId String?   @map("merchant_id")
+  merchant   Merchant? @relation(fields: [merchantId], references: [id])
+  stars      Int
+  comment    String?
+  isHidden   Boolean   @default(false) @map("is_hidden")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@unique([orderId, authorId, subjectId])
+  @@map("reviews")
+}
+
+// ───────────────────────────── Money ─────────────────────────────
+//
+// Money is tracked with a double-entry ledger, the same idea accountants use:
+// every movement is a LedgerTransaction with two or more LedgerEntries whose
+// amounts add up to zero (money leaves one wallet and arrives in another).
+// Wallet.balance is a cached sum of its entries, updated in the same
+// database transaction.
+
+enum PaymentProvider {
+  MPESA
+  AIRTEL_MONEY
+  CARD
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  REVERSED
+}
+
+/// Money coming in from outside (e.g. an M-Pesa STK Push).
+model Payment {
+  id                String          @id @default(uuid())
+  orderId           String?         @map("order_id")
+  order             Order?          @relation(fields: [orderId], references: [id])
+  provider          PaymentProvider
+  amount            Int
+  phone             String?
+  /// e.g. M-Pesa CheckoutRequestID.
+  providerRequestId String?         @unique @map("provider_request_id")
+  /// e.g. M-Pesa receipt number like "SJK3ABC123".
+  providerReceipt   String?         @unique @map("provider_receipt")
+  status            PaymentStatus   @default(PENDING)
+  failureReason     String?         @map("failure_reason")
+  /// Raw callback from the provider, kept for reconciliation and disputes.
+  rawCallback       Json?           @map("raw_callback")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  @@index([orderId])
+  @@map("payments")
+}
+
+enum WalletType {
+  CUSTOMER
+  RUNNER
+  MERCHANT
+  BUSINESS
+  /// Platform-owned wallets
+  PLATFORM_REVENUE
+  ESCROW
+  /// Mirrors money held at M-Pesa / the bank, so the ledger always balances.
+  EXTERNAL_CLEARING
+}
+
+model Wallet {
+  id         String     @id @default(uuid())
+  type       WalletType
+  userId     String?    @map("user_id")
+  user       User?      @relation(fields: [userId], references: [id])
+  businessId String?    @map("business_id")
+  business   Business?  @relation(fields: [businessId], references: [id])
+  merchantId String?    @map("merchant_id")
+  merchant   Merchant?  @relation(fields: [merchantId], references: [id])
+  currency   String     @default("KES")
+  /// Cached sum of this wallet's ledger entries.
+  balance    Int        @default(0)
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+
+  entries     LedgerEntry[]
+  withdrawals Withdrawal[]
+
+  @@unique([type, userId])
+  @@unique([type, businessId])
+  @@unique([type, merchantId])
+  @@map("wallets")
+}
+
+enum LedgerTransactionType {
+  PAYMENT_IN
+  ESCROW_HOLD
+  ESCROW_RELEASE
+  REFUND
+  WITHDRAWAL
+  BONUS
+  ADJUSTMENT
+}
+
+model LedgerTransaction {
+  id             String                @id @default(uuid())
+  type           LedgerTransactionType
+  orderId        String?               @map("order_id")
+  order          Order?                @relation(fields: [orderId], references: [id])
+  description    String
+  /// Prevents the same event (e.g. a repeated M-Pesa callback) being booked twice.
+  idempotencyKey String?               @unique @map("idempotency_key")
+  createdAt      DateTime              @default(now()) @map("created_at")
+
+  entries LedgerEntry[]
+
+  @@index([orderId])
+  @@map("ledger_transactions")
+}
+
+model LedgerEntry {
+  id            String            @id @default(uuid())
+  transactionId String            @map("transaction_id")
+  transaction   LedgerTransaction @relation(fields: [transactionId], references: [id])
+  walletId      String            @map("wallet_id")
+  wallet        Wallet            @relation(fields: [walletId], references: [id])
+  /// Positive = money into the wallet, negative = money out.
+  amount        Int
+  createdAt     DateTime          @default(now()) @map("created_at")
+
+  @@index([walletId, createdAt])
+  @@map("ledger_entries")
+}
+
+enum EscrowStatus {
+  HELD
+  RELEASED
+  REFUNDED
+  ON_HOLD
+  DISPUTED
+}
+
+/// Customer money held for an order until the delivery PIN is confirmed.
+model Escrow {
+  id         String       @id @default(uuid())
+  orderId    String       @unique @map("order_id")
+  order      Order        @relation(fields: [orderId], references: [id])
+  amount     Int
+  status     EscrowStatus @default(HELD)
+  heldAt     DateTime     @default(now()) @map("held_at")
+  releasedAt DateTime?    @map("released_at")
+  note       String?
+
+  @@index([status])
+  @@map("escrows")
+}
+
+enum WithdrawalStatus {
+  REQUESTED
+  APPROVED
+  PAID
+  REJECTED
+  ON_HOLD
+  FAILED
+}
+
+model Withdrawal {
+  id                String           @id @default(uuid())
+  walletId          String           @map("wallet_id")
+  wallet            Wallet           @relation(fields: [walletId], references: [id])
+  amount            Int
+  method            PayoutMethodType
+  /// Copy of the payout details at request time.
+  destination       Json
+  status            WithdrawalStatus @default(REQUESTED)
+  providerReference String?          @map("provider_reference")
+  reviewedById      String?          @map("reviewed_by_id")
+  note              String?
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("withdrawals")
+}

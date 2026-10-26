@@ -1,0 +1,12 @@
+{
+  "name": "@errandconnect/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Code shared by the API, mobile apps and admin panel (pricing, constants, types)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  }
+}

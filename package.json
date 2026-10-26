@@ -1,0 +1,33 @@
+{
+  "name": "errandconnect",
+  "private": true,
+  "description": "ErrandCONNECT - errands and delivery marketplace",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "dev:api": "npm run start:dev -w @errandconnect/api",
+    "db:migrate": "npm run db:migrate -w @errandconnect/api",
+    "db:seed": "npm run db:seed -w @errandconnect/api"
+  },
+  "engines": {
+    "node": ">=22",
+    "npm": ">=11"
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.2"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "prisma@7.10.1": true,
+    "@prisma/engines@7.10.1": true
+  },
+  "overrides": {
+    "multer": "^2.5.0"
+  }
+}
