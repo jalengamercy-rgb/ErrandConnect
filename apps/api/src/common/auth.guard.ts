@@ -80,8 +80,7 @@ export class AuthGuard implements CanActivate {
     const staffRoles = this.reflector.getAllAndOverride<StaffRole[] | undefined>(STAFF_ROLES, targets);
     if (staffRoles) {
       const allowed =
-        user.staffRole !== null &&
-        (user.staffRole === 'SUPER_ADMIN' || staffRoles.length === 0 || staffRoles.includes(user.staffRole));
+        user.staffRole !== null && (user.staffRole === 'SUPER_ADMIN' || staffRoles.length === 0 || staffRoles.includes(user.staffRole));
       if (!allowed) throw new ForbiddenException('Not allowed for your admin role');
     }
 

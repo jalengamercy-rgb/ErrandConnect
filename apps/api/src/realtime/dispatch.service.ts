@@ -43,7 +43,13 @@ export class DispatchService {
       select: { userId: true, lastLat: true, lastLng: true, maxDistanceKm: true },
     });
     const start = jobStart(order);
-    const nearby = runners.filter((r) => haversineKm({ lat: r.lastLat!, lng: r.lastLng! }, start) <= (r.maxDistanceKm ?? DEFAULT_JOB_RADIUS_KM));
-    this.realtime.toUsers(nearby.map((r) => r.userId), 'job.new', { orderId: order.id });
+    const nearby = runners.filter(
+      (r) => haversineKm({ lat: r.lastLat!, lng: r.lastLng! }, start) <= (r.maxDistanceKm ?? DEFAULT_JOB_RADIUS_KM),
+    );
+    this.realtime.toUsers(
+      nearby.map((r) => r.userId),
+      'job.new',
+      { orderId: order.id },
+    );
   }
 }

@@ -34,7 +34,8 @@ export default function VerifyEmailScreen() {
         ) : (
           <Button title="Send code" loading={send.isPending} onPress={() => send.mutate()} />
         )
-      }>
+      }
+    >
       {send.isSuccess && (
         <TextField
           label="Code from your email"

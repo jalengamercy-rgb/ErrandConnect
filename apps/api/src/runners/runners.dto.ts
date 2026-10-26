@@ -35,43 +35,62 @@ export class PersonalStepDto {
   @IsEnum(Gender)
   gender: Gender;
 
-  @Trim() @IsString() @Length(2, 60)
+  @Trim()
+  @IsString()
+  @Length(2, 60)
   nationality: string;
 
-  @Trim() @IsString() @Matches(/^[A-Z0-9]{6,12}$/i, { message: 'nationalIdNumber must be 6-12 letters or digits' })
+  @Trim()
+  @IsString()
+  @Matches(/^[A-Z0-9]{6,12}$/i, { message: 'nationalIdNumber must be 6-12 letters or digits' })
   nationalIdNumber: string;
 
-  @Trim() @IsEmail()
+  @Trim()
+  @IsEmail()
   email: string;
 
-  @IsOptional() @IsKenyanPhone()
+  @IsOptional()
+  @IsKenyanPhone()
   whatsapp?: string;
 }
 
 /** Step 2 */
 export class ServiceAreaStepDto {
-  @Trim() @IsString() @Length(2, 60)
+  @Trim()
+  @IsString()
+  @Length(2, 60)
   county: string;
 
-  @Trim() @IsString() @Length(2, 60)
+  @Trim()
+  @IsString()
+  @Length(2, 60)
   city: string;
 
-  @Trim() @IsString() @Length(2, 80)
+  @Trim()
+  @IsString()
+  @Length(2, 80)
   area: string;
 
-  @IsString({ each: true }) @ArrayMinSize(1) @ArrayMaxSize(20) @ArrayUnique()
+  @IsString({ each: true })
+  @ArrayMinSize(1)
+  @ArrayMaxSize(20)
+  @ArrayUnique()
   preferredAreas: string[];
 
-  @IsOptional() @IsLatitude()
+  @IsOptional()
+  @IsLatitude()
   lat?: number;
 
-  @IsOptional() @IsLongitude()
+  @IsOptional()
+  @IsLongitude()
   lng?: number;
 }
 
 /** Step 3 */
 export class DeliveryTypesStepDto {
-  @IsEnum(DeliveryType, { each: true }) @ArrayMinSize(1) @ArrayUnique()
+  @IsEnum(DeliveryType, { each: true })
+  @ArrayMinSize(1)
+  @ArrayUnique()
   deliveryTypes: DeliveryType[];
 }
 
@@ -80,13 +99,19 @@ export class VehicleDto {
   @IsEnum(DeliveryType)
   type: DeliveryType;
 
-  @Trim() @IsString() @Length(1, 40)
+  @Trim()
+  @IsString()
+  @Length(1, 40)
   make: string;
 
-  @Trim() @IsString() @Length(1, 40)
+  @Trim()
+  @IsString()
+  @Length(1, 40)
   model: string;
 
-  @Trim() @IsString() @Length(2, 30)
+  @Trim()
+  @IsString()
+  @Length(2, 30)
   color: string;
 
   /** e.g. KMEA 123B or KDA 456X; spaces are removed. */
@@ -94,16 +119,22 @@ export class VehicleDto {
   @Matches(/^[A-Z0-9]{5,10}$/, { message: 'registrationNumber looks invalid' })
   registrationNumber: string;
 
-  @IsInt() @Min(1980) @Max(new Date().getFullYear() + 1)
+  @IsInt()
+  @Min(1980)
+  @Max(new Date().getFullYear() + 1)
   year: number;
 
-  @Trim() @IsString() @Length(4, 30)
+  @Trim()
+  @IsString()
+  @Length(4, 30)
   licenceNumber: string;
 
   @IsISO8601({ strict: true })
   licenceExpiry: string;
 
-  @Trim() @IsString() @Length(4, 40)
+  @Trim()
+  @IsString()
+  @Length(4, 40)
   insuranceNumber: string;
 
   @IsISO8601({ strict: true })
@@ -112,7 +143,9 @@ export class VehicleDto {
 
 /** Step 5: documents are uploaded via POST /documents; only KRA PIN is entered here. */
 export class IdentityStepDto {
-  @Trim() @IsOptional() @Matches(/^[A-Z]\d{9}[A-Z]$/i, { message: 'kraPin should look like A123456789B' })
+  @Trim()
+  @IsOptional()
+  @Matches(/^[A-Z]\d{9}[A-Z]$/i, { message: 'kraPin should look like A123456789B' })
   kraPin?: string;
 }
 
@@ -122,7 +155,9 @@ export class PayoutStepDto {
   type: PayoutMethodType;
 
   /** Registered name on the M-Pesa line or bank account. */
-  @Trim() @IsString() @Length(2, 100)
+  @Trim()
+  @IsString()
+  @Length(2, 100)
   accountName: string;
 
   @ValidateIf((o: PayoutStepDto) => o.type !== 'BANK')
@@ -130,7 +165,9 @@ export class PayoutStepDto {
   phone?: string;
 
   @ValidateIf((o: PayoutStepDto) => o.type === 'BANK')
-  @Trim() @IsString() @Length(2, 60)
+  @Trim()
+  @IsString()
+  @Length(2, 60)
   bankName?: string;
 
   @ValidateIf((o: PayoutStepDto) => o.type === 'BANK')
@@ -138,7 +175,9 @@ export class PayoutStepDto {
   accountNumber?: string;
 
   @ValidateIf((o: PayoutStepDto) => o.type === 'BANK')
-  @Trim() @IsString() @Length(2, 60)
+  @Trim()
+  @IsString()
+  @Length(2, 60)
   branch?: string;
 }
 
@@ -147,7 +186,9 @@ export class WorkPreferencesStepDto {
   @IsEnum(Availability)
   availability: Availability;
 
-  @IsEnum(Weekday, { each: true }) @ArrayMinSize(1) @ArrayUnique()
+  @IsEnum(Weekday, { each: true })
+  @ArrayMinSize(1)
+  @ArrayUnique()
   workingDays: Weekday[];
 
   @Matches(TIME, { message: 'workStartTime must be HH:MM' })
@@ -157,13 +198,16 @@ export class WorkPreferencesStepDto {
   workEndTime: string;
 
   /** 2, 5, 10, 20 or null for no limit. */
-  @IsOptional() @IsIn(MAX_DISTANCE_CHOICES_KM)
+  @IsOptional()
+  @IsIn(MAX_DISTANCE_CHOICES_KM)
   maxDistanceKm?: number | null;
 }
 
 /** Step 9: service category slugs. */
 export class ServicesStepDto {
-  @IsString({ each: true }) @ArrayMinSize(1) @ArrayUnique()
+  @IsString({ each: true })
+  @ArrayMinSize(1)
+  @ArrayUnique()
   servicesOffered: string[];
 }
 
@@ -172,28 +216,41 @@ export class ExperienceStepDto {
   @IsBoolean()
   hasDeliveryExperience: boolean;
 
-  @Trim() @IsOptional() @IsString() @MaxLength(80)
+  @Trim()
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
   previousCompany?: string;
 
-  @IsOptional() @IsInt() @Min(0) @Max(50)
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(50)
   yearsExperience?: number;
 
-  @IsOptional() @IsInt() @Min(0) @Max(200)
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(200)
   avgDeliveriesPerDay?: number;
 }
 
 /** Step 11 */
 export class EquipmentStepDto {
-  @IsIn(RUNNER_EQUIPMENT, { each: true }) @ArrayUnique()
+  @IsIn(RUNNER_EQUIPMENT, { each: true })
+  @ArrayUnique()
   equipment: string[];
 }
 
 /** Step 12 */
 export class SkillsStepDto {
-  @IsIn(RUNNER_LANGUAGES, { each: true }) @ArrayMinSize(1) @ArrayUnique()
+  @IsIn(RUNNER_LANGUAGES, { each: true })
+  @ArrayMinSize(1)
+  @ArrayUnique()
   languages: string[];
 
-  @IsIn(RUNNER_SKILLS, { each: true }) @ArrayUnique()
+  @IsIn(RUNNER_SKILLS, { each: true })
+  @ArrayUnique()
   skills: string[];
 }
 

@@ -3,15 +3,7 @@
 
 export const CURRENCY = 'KES';
 
-export const DELIVERY_TYPES = [
-  'WALKING',
-  'BICYCLE',
-  'MOTORCYCLE',
-  'CAR',
-  'VAN',
-  'PICKUP',
-  'TRUCK',
-] as const;
+export const DELIVERY_TYPES = ['WALKING', 'BICYCLE', 'MOTORCYCLE', 'CAR', 'VAN', 'PICKUP', 'TRUCK'] as const;
 export type DeliveryType = (typeof DELIVERY_TYPES)[number];
 
 /** How fast the customer wants the errand done. STANDARD has no premium. */

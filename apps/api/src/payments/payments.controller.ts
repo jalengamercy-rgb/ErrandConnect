@@ -146,7 +146,11 @@ export class AdminFinanceController {
       where: { type: { in: ['PLATFORM_REVENUE', 'ESCROW', 'PAYOUT_PENDING', 'EXTERNAL_CLEARING'] }, userId: null },
       select: { type: true, balance: true },
     });
-    const totals = await this.prisma.wallet.groupBy({ by: ['type'], where: { type: { in: ['CUSTOMER', 'RUNNER'] } }, _sum: { balance: true } });
+    const totals = await this.prisma.wallet.groupBy({
+      by: ['type'],
+      where: { type: { in: ['CUSTOMER', 'RUNNER'] } },
+      _sum: { balance: true },
+    });
     const balance = (type: string) => wallets.find((w) => w.type === type)?.balance ?? 0;
     return {
       platformRevenue: balance('PLATFORM_REVENUE'),
@@ -179,7 +183,10 @@ export class AdminFinanceController {
   @Get('payments')
   @Staff('FINANCE_MANAGER')
   async payments(@Query() query: PaymentListQueryDto) {
-    const where = { status: query.status, ...(query.search ? { OR: [{ providerReceipt: query.search }, { phone: { contains: query.search } }] } : {}) };
+    const where = {
+      status: query.status,
+      ...(query.search ? { OR: [{ providerReceipt: query.search }, { phone: { contains: query.search } }] } : {}),
+    };
     const [total, items] = await Promise.all([
       this.prisma.payment.count({ where }),
       this.prisma.payment.findMany({

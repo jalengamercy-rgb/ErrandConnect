@@ -1,6 +1,13 @@
 import { Logger } from '@nestjs/common';
 import { randomCode, randomToken } from '../../common/crypto.js';
-import { MpesaClient, type B2cRequest, type B2cResponse, type StkPushRequest, type StkPushResponse, type StkQueryResult } from './mpesa.client.js';
+import {
+  MpesaClient,
+  type B2cRequest,
+  type B2cResponse,
+  type StkPushRequest,
+  type StkPushResponse,
+  type StkQueryResult,
+} from './mpesa.client.js';
 
 type CallbackSink = (kind: 'stk' | 'b2c', body: unknown) => Promise<unknown>;
 

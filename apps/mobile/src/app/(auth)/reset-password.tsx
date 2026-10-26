@@ -30,9 +30,22 @@ export default function ResetPasswordScreen() {
     <Screen
       title="Choose a new password"
       footer={
-        <Button title="Save password" disabled={!password || !!problem || confirm !== password} loading={reset.isPending} onPress={() => reset.mutate()} />
-      }>
-      <TextField label="New password" secureTextEntry autoComplete="new-password" value={password} onChangeText={setPassword} error={problem} />
+        <Button
+          title="Save password"
+          disabled={!password || !!problem || confirm !== password}
+          loading={reset.isPending}
+          onPress={() => reset.mutate()}
+        />
+      }
+    >
+      <TextField
+        label="New password"
+        secureTextEntry
+        autoComplete="new-password"
+        value={password}
+        onChangeText={setPassword}
+        error={problem}
+      />
       <TextField label="Confirm new password" secureTextEntry value={confirm} onChangeText={setConfirm} error={mismatch} />
       {reset.error && <Notice tone="error">{reset.error.message}</Notice>}
     </Screen>

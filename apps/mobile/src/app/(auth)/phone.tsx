@@ -25,7 +25,8 @@ export default function PhoneScreen() {
     <Screen
       title={purpose === 'REGISTER' ? 'Your phone number' : 'Reset your password'}
       subtitle="We'll send you a 6-digit code by SMS."
-      footer={<Button title="Send code" disabled={!phone} loading={request.isPending} onPress={() => request.mutate()} />}>
+      footer={<Button title="Send code" disabled={!phone} loading={request.isPending} onPress={() => request.mutate()} />}
+    >
       <TextField
         label="Mobile number"
         placeholder="0712 345 678"

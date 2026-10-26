@@ -8,14 +8,16 @@ import { Screen } from '@/components/ui/screen';
 import { Spacing } from '@/constants/theme';
 
 export default function WelcomeScreen() {
-  const signUp = (accountType: 'CUSTOMER' | 'RUNNER') =>
-    router.push({ pathname: '/phone', params: { purpose: 'REGISTER', accountType } });
+  const signUp = (accountType: 'CUSTOMER' | 'RUNNER') => router.push({ pathname: '/phone', params: { purpose: 'REGISTER', accountType } });
 
   return (
     <Screen>
       <View style={styles.hero}>
         <ThemedText type="title" style={styles.brand}>
-          Errand<ThemedText type="title" themeColor="primary">CONNECT</ThemedText>
+          Errand
+          <ThemedText type="title" themeColor="primary">
+            CONNECT
+          </ThemedText>
         </ThemedText>
         <ThemedText themeColor="textSecondary" style={styles.center}>
           Groceries, parcels, medicine, queues and more — done by trusted local runners.

@@ -25,7 +25,8 @@ export function ProgressBar({ percent }: { percent: number }) {
     <View
       accessibilityRole="progressbar"
       accessibilityValue={{ min: 0, max: 100, now: percent }}
-      style={[styles.track, { backgroundColor: theme.backgroundSelected }]}>
+      style={[styles.track, { backgroundColor: theme.backgroundSelected }]}
+    >
       <View style={[styles.fill, { width: `${Math.min(100, Math.max(0, percent))}%`, backgroundColor: theme.primary }]} />
     </View>
   );

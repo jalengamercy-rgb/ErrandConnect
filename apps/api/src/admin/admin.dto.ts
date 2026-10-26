@@ -4,19 +4,30 @@ import { OrderStatus, RunnerApplicationStatus } from '../generated/prisma/client
 import { Trim } from '../common/dto.js';
 
 export class PageQueryDto {
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1)
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
   page = 1;
 
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100)
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
   pageSize = 20;
 
   /** Matches name, phone or email. */
-  @Trim() @IsOptional() @IsString() @Length(1, 100)
+  @Trim()
+  @IsOptional()
+  @IsString()
+  @Length(1, 100)
   search?: string;
 }
 
 export class RunnerListQueryDto extends PageQueryDto {
-  @IsOptional() @IsEnum(RunnerApplicationStatus)
+  @IsOptional()
+  @IsEnum(RunnerApplicationStatus)
   status?: RunnerApplicationStatus;
 }
 
@@ -32,7 +43,9 @@ export class RunnerCheckDto {
 }
 
 export class ReasonDto {
-  @Trim() @IsString() @Length(3, 500)
+  @Trim()
+  @IsString()
+  @Length(3, 500)
   reason: string;
 }
 
@@ -41,20 +54,27 @@ export class ReviewDocumentDto {
   decision: 'APPROVED' | 'REJECTED';
 
   @ValidateIf((o: ReviewDocumentDto) => o.decision === 'REJECTED')
-  @Trim() @IsString() @Length(3, 500)
+  @Trim()
+  @IsString()
+  @Length(3, 500)
   reason?: string;
 }
 
 export class AuditLogQueryDto extends PageQueryDto {
-  @Trim() @IsOptional() @IsString()
+  @Trim()
+  @IsOptional()
+  @IsString()
   entityType?: string;
 
-  @Trim() @IsOptional() @IsString()
+  @Trim()
+  @IsOptional()
+  @IsString()
   entityId?: string;
 }
 
 export class AdminOrderListQueryDto extends PageQueryDto {
-  @IsOptional() @IsEnum(OrderStatus)
+  @IsOptional()
+  @IsEnum(OrderStatus)
   status?: OrderStatus;
 }
 

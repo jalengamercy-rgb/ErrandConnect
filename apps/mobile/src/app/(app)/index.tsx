@@ -13,7 +13,7 @@ import { ME_QUERY_KEY, useAuth } from '@/lib/auth-context';
 import { getCurrentLocation } from '@/lib/device';
 import { useCategories, useOnboarding } from '@/lib/queries';
 import { OrderRow } from '@/features/orders/components';
-import { useCustomerOrders, useRunnerOrders } from '@/lib/orders';
+import { formatKes, useCustomerOrders, useRunnerOrders, useWallets } from '@/lib/orders';
 
 export default function HomeScreen() {
   const { me } = useAuth();
@@ -25,6 +25,7 @@ export default function HomeScreen() {
       {me.runnerProfile && runnerStatus !== 'APPROVED' && <RunnerApplicationCard />}
       {runnerStatus === 'APPROVED' && <OnlineToggle online={me.runnerProfile!.isOnline} />}
       {me.customerProfile && <CustomerHome />}
+      <Button title="Wallet" variant="secondary" onPress={() => router.push('/wallet')} />
       <Button title="Profile & settings" variant="secondary" onPress={() => router.push('/profile')} />
     </Screen>
   );
@@ -73,10 +74,27 @@ function OnlineToggle({ online }: { online: boolean }) {
         {online ? 'You can receive errand requests nearby.' : 'Go online to start receiving errands.'}
       </ThemedText>
       {toggle.error && <Notice tone="error">{toggle.error.message}</Notice>}
-      <Button title={online ? 'Go offline' : 'Go online'} variant={online ? 'secondary' : 'primary'} loading={toggle.isPending} onPress={() => toggle.mutate()} />
+      <Button
+        title={online ? 'Go offline' : 'Go online'}
+        variant={online ? 'secondary' : 'primary'}
+        loading={toggle.isPending}
+        onPress={() => toggle.mutate()}
+      />
+      <EarningsLine />
       {online && <Button title="Find jobs nearby" onPress={() => router.push('/jobs')} />}
       <CurrentJob />
     </Card>
+  );
+}
+
+function EarningsLine() {
+  const { data } = useWallets();
+  const runnerWallet = data?.find((w) => w.type === 'RUNNER');
+  if (!runnerWallet) return null;
+  return (
+    <ThemedText type="small" themeColor={runnerWallet.balance < 0 ? 'warning' : 'textSecondary'}>
+      Earnings balance: {formatKes(runnerWallet.balance)}
+    </ThemedText>
   );
 }
 
@@ -112,7 +130,8 @@ function CustomerHome() {
             key={c.slug}
             accessibilityRole="button"
             onPress={() => router.push({ pathname: '/orders/new', params: { category: c.slug } })}
-            style={({ pressed }) => [styles.tile, { backgroundColor: theme.backgroundElement, opacity: pressed ? 0.7 : 1 }]}>
+            style={({ pressed }) => [styles.tile, { backgroundColor: theme.backgroundElement, opacity: pressed ? 0.7 : 1 }]}
+          >
             <ThemedText type="small">{c.name}</ThemedText>
           </Pressable>
         ))}

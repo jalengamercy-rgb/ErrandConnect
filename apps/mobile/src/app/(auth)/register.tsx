@@ -15,11 +15,24 @@ import { passwordProblem } from '@/lib/validation';
 
 /** Step 3: name, password, PIN and agreements. */
 export default function RegisterScreen() {
-  const { verificationToken, accountType, phone } = useLocalSearchParams<{ verificationToken: string; accountType: 'CUSTOMER' | 'RUNNER'; phone: string }>();
+  const { verificationToken, accountType, phone } = useLocalSearchParams<{
+    verificationToken: string;
+    accountType: 'CUSTOMER' | 'RUNNER';
+    phone: string;
+  }>();
   const { signIn } = useAuth();
   const isRunner = accountType === 'RUNNER';
 
-  const [form, setForm] = useState({ firstName: '', middleName: '', lastName: '', email: '', password: '', confirm: '', pin: '', referralCode: '' });
+  const [form, setForm] = useState({
+    firstName: '',
+    middleName: '',
+    lastName: '',
+    email: '',
+    password: '',
+    confirm: '',
+    pin: '',
+    referralCode: '',
+  });
   const [agree, setAgree] = useState({ terms: false, privacy: false, gps: isRunner, marketing: false });
   const set = (key: keyof typeof form) => (value: string) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -29,8 +42,16 @@ export default function RegisterScreen() {
     pin: form.pin && !/^\d{4}$/.test(form.pin) ? 'PIN must be 4 digits' : undefined,
   };
   const ready =
-    form.firstName.trim() && form.lastName.trim() && form.password && form.confirm && form.pin &&
-    !errors.password && !errors.confirm && !errors.pin && agree.terms && agree.privacy;
+    form.firstName.trim() &&
+    form.lastName.trim() &&
+    form.password &&
+    form.confirm &&
+    form.pin &&
+    !errors.password &&
+    !errors.confirm &&
+    !errors.pin &&
+    agree.terms &&
+    agree.privacy;
 
   const register = useMutation({
     mutationFn: () =>
@@ -56,7 +77,8 @@ export default function RegisterScreen() {
     <Screen
       title={isRunner ? 'Create your runner account' : 'Create your account'}
       subtitle={`Phone ${phone} verified ✓`}
-      footer={<Button title="Create account" disabled={!ready} loading={register.isPending} onPress={() => register.mutate()} />}>
+      footer={<Button title="Create account" disabled={!ready} loading={register.isPending} onPress={() => register.mutate()} />}
+    >
       <TextField label="First name" autoComplete="given-name" value={form.firstName} onChangeText={set('firstName')} />
       <TextField label="Middle name" optional autoComplete="additional-name" value={form.middleName} onChangeText={set('middleName')} />
       <TextField label="Last name" autoComplete="family-name" value={form.lastName} onChangeText={set('lastName')} />

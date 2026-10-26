@@ -84,7 +84,11 @@ export class TokensService {
       data: { refreshTokenHash: sha256(next), expiresAt: new Date(Date.now() + this.refreshTtlMs) },
     });
     if (count === 0) throw new UnauthorizedException('Session expired, please log in again');
-    return { accessToken: await this.signAccess(session.userId, session.id), refreshToken: next, accessTokenExpiresIn: this.accessTtlSeconds };
+    return {
+      accessToken: await this.signAccess(session.userId, session.id),
+      refreshToken: next,
+      accessTokenExpiresIn: this.accessTtlSeconds,
+    };
   }
 
   revokeSession(sessionId: string) {

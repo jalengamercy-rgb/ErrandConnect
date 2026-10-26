@@ -20,7 +20,12 @@ export default function RunnerOnboardingScreen() {
   const submit = useMutation({ mutationFn: () => api.post<Onboarding>('/runners/me/onboarding/submit'), onSuccess: saved });
 
   if (isLoading) return <Loading />;
-  if (!data) return <Screen><Notice tone="error">{error?.message ?? 'Could not load your application'}</Notice></Screen>;
+  if (!data)
+    return (
+      <Screen>
+        <Notice tone="error">{error?.message ?? 'Could not load your application'}</Notice>
+      </Screen>
+    );
 
   const editable = data.applicationStatus === 'DRAFT' || data.applicationStatus === 'REJECTED';
 
@@ -30,7 +35,8 @@ export default function RunnerOnboardingScreen() {
         editable && (
           <Button title="Submit application" disabled={!data.canSubmit} loading={submit.isPending} onPress={() => submit.mutate()} />
         )
-      }>
+      }
+    >
       {editable ? (
         <Card>
           <ThemedText type="smallBold">Profile {data.percentComplete}% complete</ThemedText>
@@ -66,7 +72,8 @@ export default function RunnerOnboardingScreen() {
           style={({ pressed }) => [
             styles.step,
             { backgroundColor: theme.backgroundElement, borderColor: theme.border, opacity: pressed ? 0.7 : 1 },
-          ]}>
+          ]}
+        >
           <View style={[styles.badge, { backgroundColor: step.complete ? theme.success : theme.backgroundSelected }]}>
             <ThemedText type="smallBold" style={{ color: step.complete ? '#fff' : theme.text }}>
               {step.complete ? '✓' : step.number}

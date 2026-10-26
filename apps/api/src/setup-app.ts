@@ -13,7 +13,9 @@ export function setupApp(app: INestApplication) {
   );
   // Browsers (the web build of the app, the admin panel) may call the API from
   // these origins. Native mobile apps aren't affected by CORS.
-  const origins = process.env.CORS_ORIGINS?.split(',').map((o) => o.trim()).filter(Boolean);
+  const origins = process.env.CORS_ORIGINS?.split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
   const corsOrigin = origins?.length ? origins : process.env.NODE_ENV !== 'production';
   app.enableCors({ origin: corsOrigin });
   app.useWebSocketAdapter(new RealtimeAdapter(app, corsOrigin));

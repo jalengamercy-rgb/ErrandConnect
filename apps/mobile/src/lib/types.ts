@@ -1,4 +1,4 @@
-import type { DeliveryType, RunnerOnboardingStepKey } from '@errandconnect/shared';
+import type { DeliveryType, OrderStatus, RunnerOnboardingStepKey, Urgency } from '@errandconnect/shared';
 
 // Shapes of API responses used by the app. See docs/API.md.
 
@@ -156,20 +156,7 @@ export interface Onboarding {
   vehicles: Vehicle[];
 }
 
-export type OrderStatus =
-  | 'PENDING'
-  | 'ACCEPTED'
-  | 'RUNNER_ASSIGNED'
-  | 'AT_STORE'
-  | 'PICKED_UP'
-  | 'IN_TRANSIT'
-  | 'DELIVERED'
-  | 'COMPLETED'
-  | 'CANCELLED'
-  | 'REFUNDED'
-  | 'DISPUTED';
-
-export type Urgency = 'STANDARD' | 'WITHIN_1_HOUR' | 'WITHIN_30_MIN' | 'WITHIN_15_MIN';
+export type { OrderStatus, Urgency } from '@errandconnect/shared';
 
 export interface Quote {
   customer: { itemsCost: number; errandFee: number; deliveryFee: number; urgencyFee: number; serviceFee: number; total: number };
@@ -220,7 +207,8 @@ export interface Order {
   runnerEarnings: number;
   /** What the runner keeps (earnings minus paying back the items). */
   runnerFee: number;
-  paymentMethod: string;
+  paymentMethod: 'MPESA' | 'WALLET' | 'CASH';
+  paidAt: string | null;
   deliveryPin?: string;
   cancelReason: string | null;
   createdAt: string;
@@ -234,11 +222,54 @@ export interface Order {
     rating: number;
     ratingCount: number;
     jobsCompleted: number;
-    vehicle: { type: DeliveryType; registrationNumber: string | null; make: string | null; model: string | null; color: string | null } | null;
+    vehicle: {
+      type: DeliveryType;
+      registrationNumber: string | null;
+      make: string | null;
+      model: string | null;
+      color: string | null;
+    } | null;
     location: { lat: number; lng: number; at: string } | null;
   } | null;
   events: { status: OrderStatus; note: string | null; createdAt: string }[];
   myReview: { stars: number; comment: string | null } | null;
+  /** Latest payment attempt (customer and staff only). */
+  payment?: {
+    status: 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'REVERSED';
+    failureReason: string | null;
+    providerReceipt: string | null;
+    phone: string | null;
+  } | null;
+  escrowStatus: 'HELD' | 'RELEASED' | 'REFUNDED' | 'ON_HOLD' | 'DISPUTED' | null;
+  /** Only right after creating an M-Pesa order. */
+  paymentRequest?: { requested: boolean; message: string };
+}
+
+export interface Wallet {
+  type: 'CUSTOMER' | 'RUNNER';
+  balance: number;
+  currency: string;
+  pendingWithdrawals: number;
+}
+
+export interface WalletTransaction {
+  id: string;
+  amount: number;
+  createdAt: string;
+  type: string;
+  description: string;
+  order: { id: string; orderNumber: string } | null;
+}
+
+export interface Withdrawal {
+  id: string;
+  amount: number;
+  method: 'MPESA' | 'BANK';
+  destination: { phone?: string; bankName?: string; accountNumber?: string };
+  status: 'REQUESTED' | 'APPROVED' | 'PAID' | 'REJECTED' | 'ON_HOLD' | 'FAILED';
+  providerReceipt: string | null;
+  note: string | null;
+  createdAt: string;
 }
 
 export interface Job {

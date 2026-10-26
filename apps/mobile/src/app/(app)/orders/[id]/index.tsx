@@ -77,7 +77,13 @@ function Reasoned({ label, onSubmit, loading }: { label: string; onSubmit: (reas
   return (
     <Card>
       <TextField label="Reason" value={reason} onChangeText={setReason} autoFocus />
-      <Button title={label} variant="danger" disabled={reason.trim().length < 3} loading={loading} onPress={() => onSubmit(reason.trim())} />
+      <Button
+        title={label}
+        variant="danger"
+        disabled={reason.trim().length < 3}
+        loading={loading}
+        onPress={() => onSubmit(reason.trim())}
+      />
       <Button title="Never mind" variant="ghost" onPress={() => setOpen(false)} />
     </Card>
   );
@@ -86,7 +92,9 @@ function Reasoned({ label, onSubmit, loading }: { label: string; onSubmit: (reas
 function RateCard({ order, who }: { order: Order; who: string }) {
   const [stars, setStars] = useState(0);
   const [comment, setComment] = useState('');
-  const review = useOrderAction(order, () => api.post<Order>(`/orders/${order.id}/review`, { stars, comment: comment.trim() || undefined }));
+  const review = useOrderAction(order, () =>
+    api.post<Order>(`/orders/${order.id}/review`, { stars, comment: comment.trim() || undefined }),
+  );
   if (order.status !== 'COMPLETED') return null;
   if (order.myReview) {
     return (
@@ -109,7 +117,7 @@ function RateCard({ order, who }: { order: Order; who: string }) {
 
 function CustomerView({ order }: { order: Order }) {
   const cancel = useOrderAction(order, (reason: string) => api.post<Order>(`/orders/${order.id}/cancel`, { reason }));
-  const active = RUNNER_ACTIVE_STATUSES.includes(order.status) || order.status === 'PENDING';
+  const active = RUNNER_ACTIVE_STATUSES.includes(order.status) || order.status === 'PENDING' || order.status === 'AWAITING_PAYMENT';
   const runner = order.runner;
   const awayKm = runner?.location ? haversineKm(runner.location, { lat: order.dropoffLat, lng: order.dropoffLng }) : null;
 
@@ -123,7 +131,9 @@ function CustomerView({ order }: { order: Order }) {
         )}
       </Header>
 
-      {active && order.deliveryPin && (
+      {order.status === 'AWAITING_PAYMENT' && <AwaitingPayment order={order} />}
+
+      {active && order.status !== 'AWAITING_PAYMENT' && order.deliveryPin && (
         <Card>
           <ThemedText type="smallBold">Delivery PIN</ThemedText>
           <ThemedText type="title" style={styles.pin}>
@@ -142,7 +152,9 @@ function CustomerView({ order }: { order: Order }) {
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
             ★ {runner.ratingCount ? runner.rating.toFixed(1) : 'New'} · {runner.jobsCompleted} errand{runner.jobsCompleted === 1 ? '' : 's'}
-            {runner.vehicle ? ` · ${runner.vehicle.make ?? ''} ${runner.vehicle.model ?? ''} ${runner.vehicle.registrationNumber ?? ''}` : ''}
+            {runner.vehicle
+              ? ` · ${runner.vehicle.make ?? ''} ${runner.vehicle.model ?? ''} ${runner.vehicle.registrationNumber ?? ''}`
+              : ''}
           </ThemedText>
           {runner.location && (
             <ThemedText type="small">
@@ -160,7 +172,11 @@ function CustomerView({ order }: { order: Order }) {
             </View>
           </View>
           {runner.location && active && (
-            <Button title="See runner on map" variant="ghost" onPress={() => Linking.openURL(mapUrl(runner.location!.lat, runner.location!.lng))} />
+            <Button
+              title="See runner on map"
+              variant="ghost"
+              onPress={() => Linking.openURL(mapUrl(runner.location!.lat, runner.location!.lng))}
+            />
           )}
         </Card>
       )}
@@ -173,7 +189,7 @@ function CustomerView({ order }: { order: Order }) {
         {order.pickupAddress && <ThemedText type="small">Pickup: {order.pickupAddress}</ThemedText>}
       </Card>
       <PriceBreakdown quote={order} distanceKm={order.distanceKm} />
-      {active && <Notice>Pay {formatKes(order.total)} in cash to the runner on delivery (items cost may change slightly).</Notice>}
+      <PaymentStatus order={order} />
       <Timeline events={order.events} />
 
       {CUSTOMER_CANCELLABLE_STATUSES.includes(order.status) && (
@@ -181,6 +197,70 @@ function CustomerView({ order }: { order: Order }) {
       )}
       {cancel.error && <Notice tone="error">{cancel.error.message}</Notice>}
     </Screen>
+  );
+}
+
+const PAYMENT_LABELS = { MPESA: 'M-Pesa', WALLET: 'wallet', CASH: 'cash' } as const;
+
+/** "Check your phone" while waiting for the M-Pesa prompt to be answered. */
+function AwaitingPayment({ order }: { order: Order }) {
+  const queryClient = useQueryClient();
+  const resend = useMutation({
+    mutationFn: () => api.post<{ message: string }>(`/orders/${order.id}/pay`, {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: orderKeys.detail(order.id) }),
+  });
+  const check = useMutation({
+    mutationFn: () => api.post(`/orders/${order.id}/payment/refresh`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: orderKeys.detail(order.id) }),
+  });
+  const payment = order.payment;
+  const failed = payment && (payment.status === 'FAILED' || payment.status === 'CANCELLED');
+
+  return (
+    <Card>
+      <ThemedText type="smallBold">Pay {formatKes(order.total)} with M-Pesa</ThemedText>
+      {failed ? (
+        <Notice tone="error">Payment didn&apos;t go through: {payment.failureReason ?? 'please try again'}.</Notice>
+      ) : payment?.status === 'PENDING' ? (
+        <ThemedText type="small">
+          📱 Check your phone ({payment.phone}) and enter your M-Pesa PIN. This page updates once you pay.
+        </ThemedText>
+      ) : (
+        <ThemedText type="small">We couldn&apos;t send the payment prompt. Try again.</ThemedText>
+      )}
+      {resend.error && <Notice tone="error">{resend.error.message}</Notice>}
+      <Button
+        title={failed || !payment ? 'Try paying again' : 'Resend prompt'}
+        variant={failed ? 'primary' : 'secondary'}
+        loading={resend.isPending}
+        onPress={() => resend.mutate()}
+      />
+      {payment?.status === 'PENDING' && (
+        <Button title="I've paid — check now" variant="ghost" loading={check.isPending} onPress={() => check.mutate()} />
+      )}
+    </Card>
+  );
+}
+
+function PaymentStatus({ order }: { order: Order }) {
+  if (order.status === 'AWAITING_PAYMENT') return null;
+  if (order.paymentMethod === 'CASH') {
+    const due = RUNNER_ACTIVE_STATUSES.includes(order.status) || order.status === 'PENDING';
+    return due ? <Notice>Pay {formatKes(order.total)} in cash to the runner on delivery.</Notice> : null;
+  }
+  const receipt = order.payment?.providerReceipt ? ` · receipt ${order.payment.providerReceipt}` : '';
+  const escrow = {
+    HELD: 'Held safely until you give the runner your delivery PIN.',
+    RELEASED: 'Paid to the runner after delivery.',
+    REFUNDED: 'Refunded to your ErrandCONNECT wallet.',
+    ON_HOLD: 'On hold while support reviews this errand.',
+    DISPUTED: 'On hold while support reviews this errand.',
+  };
+  return (
+    <Notice tone="success">
+      Paid via {PAYMENT_LABELS[order.paymentMethod]}
+      {receipt}. {order.escrowStatus ? escrow[order.escrowStatus] : ''}
+    </Notice>
   );
 }
 
@@ -206,9 +286,10 @@ function RunnerView({ order }: { order: Order }) {
 
   const active = RUNNER_ACTIVE_STATUSES.includes(order.status);
   // Errands without a pickup point go straight from accepted to "on my way".
-  const next = !order.pickupAddress && (order.status === 'ACCEPTED' || order.status === 'RUNNER_ASSIGNED')
-    ? { status: 'IN_TRANSIT' as const, label: 'On my way to the customer' }
-    : NEXT_STEP[order.status];
+  const next =
+    !order.pickupAddress && (order.status === 'ACCEPTED' || order.status === 'RUNNER_ASSIGNED')
+      ? { status: 'IN_TRANSIT' as const, label: 'On my way to the customer' }
+      : NEXT_STEP[order.status];
 
   return (
     <Screen>
@@ -218,21 +299,31 @@ function RunnerView({ order }: { order: Order }) {
         </ThemedText>
       </Header>
 
-      {active && (
-        <Notice>
-          Collect {formatKes(order.total)} in cash from the customer
-          {order.itemsCost > 0 ? `, including ${formatKes(order.itemsCost)} for items (adjust to the receipt)` : ''}.
-        </Notice>
-      )}
+      {active &&
+        (order.paymentMethod === 'CASH' ? (
+          <Notice>
+            Collect {formatKes(order.total)} in cash from the customer
+            {order.itemsCost > 0 ? `, including ${formatKes(order.itemsCost)} for items` : ''}. The platform fee of{' '}
+            {formatKes(order.total - order.runnerEarnings)} is taken from your wallet.
+          </Notice>
+        ) : (
+          <Notice tone="success">
+            Paid in advance — don&apos;t collect any money.
+            {order.itemsCost > 0 ? ` Buy the items (about ${formatKes(order.itemsCost)}); you get it back with your fee.` : ''}{' '}
+            {formatKes(order.runnerEarnings)} goes to your wallet when you confirm delivery.
+          </Notice>
+        ))}
 
       <Card>
-        <ThemedText type="smallBold">
-          {order.recipientName ?? `${order.customer.firstName} ${order.customer.lastName}`}
-        </ThemedText>
+        <ThemedText type="smallBold">{order.recipientName ?? `${order.customer.firstName} ${order.customer.lastName}`}</ThemedText>
         <View style={styles.actions}>
           {(order.recipientPhone ?? order.customer.phone) && active && (
             <View style={styles.flex}>
-              <Button title="Call" variant="secondary" onPress={() => Linking.openURL(`tel:${order.recipientPhone ?? order.customer.phone}`)} />
+              <Button
+                title="Call"
+                variant="secondary"
+                onPress={() => Linking.openURL(`tel:${order.recipientPhone ?? order.customer.phone}`)}
+              />
             </View>
           )}
           <View style={styles.flex}>
@@ -245,13 +336,25 @@ function RunnerView({ order }: { order: Order }) {
         <Card>
           <ThemedText type="smallBold">1. Pickup</ThemedText>
           <ThemedText type="small">{order.pickupAddress}</ThemedText>
-          {active && <Button title="Navigate to pickup" variant="ghost" onPress={() => Linking.openURL(directionsUrl(order.pickupLat!, order.pickupLng!))} />}
+          {active && (
+            <Button
+              title="Navigate to pickup"
+              variant="ghost"
+              onPress={() => Linking.openURL(directionsUrl(order.pickupLat!, order.pickupLng!))}
+            />
+          )}
         </Card>
       )}
       <Card>
         <ThemedText type="smallBold">{order.pickupAddress ? '2. ' : ''}Deliver to</ThemedText>
         <ThemedText type="small">{order.dropoffAddress}</ThemedText>
-        {active && <Button title="Navigate to customer" variant="ghost" onPress={() => Linking.openURL(directionsUrl(order.dropoffLat, order.dropoffLng))} />}
+        {active && (
+          <Button
+            title="Navigate to customer"
+            variant="ghost"
+            onPress={() => Linking.openURL(directionsUrl(order.dropoffLat, order.dropoffLng))}
+          />
+        )}
       </Card>
 
       {active && next && <Button title={next.label} loading={progress.isPending} onPress={() => progress.mutate(next.status)} />}
@@ -268,7 +371,12 @@ function RunnerView({ order }: { order: Order }) {
             onChangeText={(t) => setPin(t.replace(/\D/g, ''))}
           />
           {deliver.error && <Notice tone="error">{deliver.error.message}</Notice>}
-          <Button title="Confirm delivery" disabled={pin.length !== 4} loading={deliver.isPending} onPress={() => deliver.mutate(undefined)} />
+          <Button
+            title="Confirm delivery"
+            disabled={pin.length !== 4}
+            loading={deliver.isPending}
+            onPress={() => deliver.mutate(undefined)}
+          />
         </Card>
       )}
 

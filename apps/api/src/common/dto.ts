@@ -8,10 +8,7 @@ import { registerDecorator, ValidationOptions } from 'class-validator';
  */
 export function IsKenyanPhone(options?: ValidationOptions): PropertyDecorator {
   return (target, propertyKey) => {
-    Transform(({ value }) => (typeof value === 'string' ? (normalizeKenyanPhone(value) ?? value) : value))(
-      target,
-      propertyKey,
-    );
+    Transform(({ value }) => (typeof value === 'string' ? (normalizeKenyanPhone(value) ?? value) : value))(target, propertyKey);
     registerDecorator({
       name: 'isKenyanPhone',
       target: target.constructor,

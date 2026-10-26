@@ -42,7 +42,8 @@ export default function ChatScreen() {
           </View>
           <Button title="Send" disabled={!text.trim()} loading={send.isPending} onPress={() => send.mutate()} />
         </View>
-      }>
+      }
+    >
       {error && <Notice tone="error">{error.message}</Notice>}
       {messages?.length === 0 && <Notice>Say hello 👋 Messages are only visible to you and the other person on this errand.</Notice>}
       {messages?.map((m) => {
@@ -50,11 +51,8 @@ export default function ChatScreen() {
         return (
           <View
             key={m.id}
-            style={[
-              styles.bubble,
-              mine ? styles.mine : styles.theirs,
-              { backgroundColor: mine ? theme.primary : theme.backgroundElement },
-            ]}>
+            style={[styles.bubble, mine ? styles.mine : styles.theirs, { backgroundColor: mine ? theme.primary : theme.backgroundElement }]}
+          >
             <ThemedText style={{ color: mine ? theme.onPrimary : theme.text }}>{m.body}</ThemedText>
             <ThemedText type="small" style={{ color: mine ? theme.onPrimary : theme.textSecondary }}>
               {new Date(m.createdAt).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}

@@ -58,7 +58,12 @@ function DocumentUpload({ type, label, hint, document }: { type: string; label: 
           </View>
         )}
         <View style={styles.flex}>
-          <Button title={Platform.OS === 'web' ? 'Upload photo' : 'From gallery'} variant="secondary" loading={upload.isPending} onPress={() => upload.mutate('library')} />
+          <Button
+            title={Platform.OS === 'web' ? 'Upload photo' : 'From gallery'}
+            variant="secondary"
+            loading={upload.isPending}
+            onPress={() => upload.mutate('library')}
+          />
         </View>
       </View>
       {upload.error && <Notice tone="error">{upload.error.message}</Notice>}
@@ -78,14 +83,44 @@ export function IdentityStep({ data }: StepProps) {
     <Screen
       title="Identity verification"
       subtitle="Clear photos in good light. Our team checks every document."
-      footer={<Button title="Save and continue" disabled={!uploaded || !kraOk} loading={save.isPending} onPress={() => save.mutate({ kraPin: kraPin || undefined })} />}>
+      footer={
+        <Button
+          title="Save and continue"
+          disabled={!uploaded || !kraOk}
+          loading={save.isPending}
+          onPress={() => save.mutate({ kraPin: kraPin || undefined })}
+        />
+      }
+    >
       <DocumentUpload type="NATIONAL_ID_FRONT" label="National ID — front" document={docs.NATIONAL_ID_FRONT} />
       <DocumentUpload type="NATIONAL_ID_BACK" label="National ID — back" document={docs.NATIONAL_ID_BACK} />
-      <DocumentUpload type="SELFIE" label="Profile photo (selfie)" hint="Face the camera, no hat or sunglasses. This becomes your profile photo." document={docs.SELFIE} />
-      <DocumentUpload type="SELFIE_WITH_ID" label="Selfie holding your ID" hint="Hold your ID next to your face." document={docs.SELFIE_WITH_ID} />
+      <DocumentUpload
+        type="SELFIE"
+        label="Profile photo (selfie)"
+        hint="Face the camera, no hat or sunglasses. This becomes your profile photo."
+        document={docs.SELFIE}
+      />
+      <DocumentUpload
+        type="SELFIE_WITH_ID"
+        label="Selfie holding your ID"
+        hint="Hold your ID next to your face."
+        document={docs.SELFIE_WITH_ID}
+      />
       <DocumentUpload type="PASSPORT" label="Passport (optional)" document={docs.PASSPORT} />
-      <DocumentUpload type="POLICE_CLEARANCE" label="Police clearance certificate (optional, recommended)" document={docs.POLICE_CLEARANCE} />
-      <TextField label="KRA PIN" optional placeholder="A123456789B" autoCapitalize="characters" value={kraPin} onChangeText={setKraPin} error={!kraOk ? 'KRA PIN looks like A123456789B' : undefined} />
+      <DocumentUpload
+        type="POLICE_CLEARANCE"
+        label="Police clearance certificate (optional, recommended)"
+        document={docs.POLICE_CLEARANCE}
+      />
+      <TextField
+        label="KRA PIN"
+        optional
+        placeholder="A123456789B"
+        autoCapitalize="characters"
+        value={kraPin}
+        onChangeText={setKraPin}
+        error={!kraOk ? 'KRA PIN looks like A123456789B' : undefined}
+      />
       {!uploaded && <Notice>Upload the four required photos to continue.</Notice>}
       {save.error && <Notice tone="error">{save.error.message}</Notice>}
     </Screen>
@@ -124,8 +159,17 @@ export function VehiclesStep({ data }: StepProps) {
         </Card>
       ))}
       {missing.length > 0 && <Notice>Add details for: {missing.map(humanize).join(', ')}</Notice>}
-      {adding ? <VehicleForm types={motorized} onDone={() => setAdding(false)} /> : <Button title="Add a vehicle" variant="secondary" onPress={() => setAdding(true)} />}
-      <DocumentUpload type="VEHICLE_PHOTO" label="Vehicle photo" hint="Show the number plate clearly." document={data.answers.documents.VEHICLE_PHOTO} />
+      {adding ? (
+        <VehicleForm types={motorized} onDone={() => setAdding(false)} />
+      ) : (
+        <Button title="Add a vehicle" variant="secondary" onPress={() => setAdding(true)} />
+      )}
+      <DocumentUpload
+        type="VEHICLE_PHOTO"
+        label="Vehicle photo"
+        hint="Show the number plate clearly."
+        document={data.answers.documents.VEHICLE_PHOTO}
+      />
       {remove.error && <Notice tone="error">{remove.error.message}</Notice>}
     </Screen>
   );
@@ -135,7 +179,15 @@ function VehicleForm({ types, onDone }: { types: DeliveryType[]; onDone: () => v
   const saved = useOnboardingSaved();
   const [type, setType] = useState<DeliveryType>(types[0]);
   const [form, setForm] = useState({
-    make: '', model: '', color: '', registrationNumber: '', year: '', licenceNumber: '', licenceExpiry: '', insuranceNumber: '', insuranceExpiry: '',
+    make: '',
+    model: '',
+    color: '',
+    registrationNumber: '',
+    year: '',
+    licenceNumber: '',
+    licenceExpiry: '',
+    insuranceNumber: '',
+    insuranceExpiry: '',
   });
   const set = (key: keyof typeof form) => (value: string) => setForm((f) => ({ ...f, [key]: value }));
   const add = useMutation({
@@ -148,8 +200,15 @@ function VehicleForm({ types, onDone }: { types: DeliveryType[]; onDone: () => v
 
   const dateError = (v: string) => (v.length >= 10 && !isIsoDate(v) ? 'Use YYYY-MM-DD' : undefined);
   const ready =
-    form.make && form.model && form.color && form.registrationNumber.replace(/\s/g, '').length >= 5 && /^\d{4}$/.test(form.year) &&
-    form.licenceNumber.length >= 4 && isIsoDate(form.licenceExpiry) && form.insuranceNumber.length >= 4 && isIsoDate(form.insuranceExpiry);
+    form.make &&
+    form.model &&
+    form.color &&
+    form.registrationNumber.replace(/\s/g, '').length >= 5 &&
+    /^\d{4}$/.test(form.year) &&
+    form.licenceNumber.length >= 4 &&
+    isIsoDate(form.licenceExpiry) &&
+    form.insuranceNumber.length >= 4 &&
+    isIsoDate(form.insuranceExpiry);
 
   return (
     <Card>
@@ -157,12 +216,35 @@ function VehicleForm({ types, onDone }: { types: DeliveryType[]; onDone: () => v
       <TextField label="Make" placeholder="e.g. Bajaj, Toyota" value={form.make} onChangeText={set('make')} />
       <TextField label="Model" placeholder="e.g. Boxer, Probox" value={form.model} onChangeText={set('model')} />
       <TextField label="Colour" value={form.color} onChangeText={set('color')} />
-      <TextField label="Registration number" placeholder="KMEA 123B" autoCapitalize="characters" value={form.registrationNumber} onChangeText={set('registrationNumber')} />
+      <TextField
+        label="Registration number"
+        placeholder="KMEA 123B"
+        autoCapitalize="characters"
+        value={form.registrationNumber}
+        onChangeText={set('registrationNumber')}
+      />
       <TextField label="Year" keyboardType="number-pad" maxLength={4} value={form.year} onChangeText={set('year')} />
-      <TextField label="Driving licence number" autoCapitalize="characters" value={form.licenceNumber} onChangeText={set('licenceNumber')} />
-      <TextField label="Licence expiry date" placeholder="YYYY-MM-DD" value={form.licenceExpiry} onChangeText={set('licenceExpiry')} error={dateError(form.licenceExpiry)} />
+      <TextField
+        label="Driving licence number"
+        autoCapitalize="characters"
+        value={form.licenceNumber}
+        onChangeText={set('licenceNumber')}
+      />
+      <TextField
+        label="Licence expiry date"
+        placeholder="YYYY-MM-DD"
+        value={form.licenceExpiry}
+        onChangeText={set('licenceExpiry')}
+        error={dateError(form.licenceExpiry)}
+      />
       <TextField label="Insurance number" autoCapitalize="characters" value={form.insuranceNumber} onChangeText={set('insuranceNumber')} />
-      <TextField label="Insurance expiry date" placeholder="YYYY-MM-DD" value={form.insuranceExpiry} onChangeText={set('insuranceExpiry')} error={dateError(form.insuranceExpiry)} />
+      <TextField
+        label="Insurance expiry date"
+        placeholder="YYYY-MM-DD"
+        value={form.insuranceExpiry}
+        onChangeText={set('insuranceExpiry')}
+        error={dateError(form.insuranceExpiry)}
+      />
       {add.error && <Notice tone="error">{add.error.message}</Notice>}
       <Button title="Save vehicle" disabled={!ready} loading={add.isPending} onPress={() => add.mutate()} />
       <Button title="Cancel" variant="ghost" onPress={onDone} />

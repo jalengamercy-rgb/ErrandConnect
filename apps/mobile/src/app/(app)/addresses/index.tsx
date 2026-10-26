@@ -15,7 +15,10 @@ export default function AddressesScreen() {
   const queryClient = useQueryClient();
   const { data, isLoading } = useAddresses();
   const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.addresses });
-  const makeDefault = useMutation({ mutationFn: (id: string) => api.patch(`/me/addresses/${id}`, { isDefault: true }), onSuccess: refresh });
+  const makeDefault = useMutation({
+    mutationFn: (id: string) => api.patch(`/me/addresses/${id}`, { isDefault: true }),
+    onSuccess: refresh,
+  });
   const remove = useMutation({ mutationFn: (id: string) => api.delete(`/me/addresses/${id}`), onSuccess: refresh });
 
   if (isLoading) return <Loading />;
@@ -25,7 +28,12 @@ export default function AddressesScreen() {
       {data?.map((address) => (
         <Card key={address.id}>
           <ThemedText type="smallBold">
-            {address.label} {address.isDefault && <ThemedText type="small" themeColor="primary">· Default</ThemedText>}
+            {address.label}{' '}
+            {address.isDefault && (
+              <ThemedText type="small" themeColor="primary">
+                · Default
+              </ThemedText>
+            )}
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
             {formatAddress(address) || `${address.lat.toFixed(5)}, ${address.lng.toFixed(5)}`}

@@ -66,7 +66,10 @@ export class RunnersService {
       this.prisma.payoutMethod.findFirst({ where: { userId }, omit: { userId: true } }),
     ]);
     const documents = Object.fromEntries(
-      [...state.documents].map(([type, d]) => [type, { id: d.id, status: d.status, rejectionReason: d.rejectionReason, createdAt: d.createdAt }]),
+      [...state.documents].map(([type, d]) => [
+        type,
+        { id: d.id, status: d.status, rejectionReason: d.rejectionReason, createdAt: d.createdAt },
+      ]),
     );
     return {
       runnerCode: state.profile.runnerCode,

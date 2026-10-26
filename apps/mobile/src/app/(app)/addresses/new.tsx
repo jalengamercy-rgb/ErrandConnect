@@ -41,7 +41,9 @@ export default function NewAddressScreen() {
 
   const labelOk = label !== 'Other' || customLabel.trim().length > 0;
   return (
-    <Screen footer={<Button title="Save address" disabled={!location || !labelOk} loading={save.isPending} onPress={() => save.mutate()} />}>
+    <Screen
+      footer={<Button title="Save address" disabled={!location || !labelOk} loading={save.isPending} onPress={() => save.mutate()} />}
+    >
       <ChoiceChips label="Name" choices={LABELS.map((l) => ({ value: l, label: l }))} value={label} onChange={setLabel} />
       {label === 'Other' && <TextField label="Custom name" value={customLabel} onChangeText={setCustomLabel} />}
 
@@ -55,7 +57,12 @@ export default function NewAddressScreen() {
           Stand at the address and tap below so runners can find it exactly.
         </ThemedText>
       )}
-      <Button title={location ? 'Update location' : 'Use my current location'} variant="secondary" loading={locate.isPending} onPress={() => locate.mutate()} />
+      <Button
+        title={location ? 'Update location' : 'Use my current location'}
+        variant="secondary"
+        loading={locate.isPending}
+        onPress={() => locate.mutate()}
+      />
       {locate.error && <Notice tone="error">{locate.error.message}</Notice>}
 
       <TextField label="Estate / area" placeholder="e.g. Kilimani" value={form.area} onChangeText={set('area')} />

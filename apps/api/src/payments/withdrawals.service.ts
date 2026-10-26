@@ -1,4 +1,12 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { AUTO_APPROVE_WITHDRAWAL_LIMIT, MAX_WITHDRAWAL, MIN_WITHDRAWAL } from '@errandconnect/shared';
 import { randomUUID } from 'node:crypto';
 import type { AuthUser } from '../common/auth-user.js';
@@ -36,7 +44,12 @@ export class WithdrawalsService {
     }
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
-      select: { phone: true, pinHash: true, runnerProfile: { select: { applicationStatus: true } }, payoutMethods: { where: { isDefault: true }, take: 1 } },
+      select: {
+        phone: true,
+        pinHash: true,
+        runnerProfile: { select: { applicationStatus: true } },
+        payoutMethods: { where: { isDefault: true }, take: 1 },
+      },
     });
     if (!(await verifySecret(pin, user.pinHash))) throw new UnauthorizedException('Incorrect security PIN');
 
@@ -63,7 +76,7 @@ export class WithdrawalsService {
       const pending = await this.ledger.systemWallet(tx, 'PAYOUT_PENDING');
       await this.ledger.post(tx, {
         type: 'WITHDRAWAL',
-        description: 'Withdrawal requested',
+        description: method === 'BANK' ? 'Withdrawal to bank' : 'Withdrawal to M-Pesa',
         idempotencyKey: `withdraw-hold:${created.id}`,
         entries: [
           { walletId: wallet.id, amount: -amount, noOverdraft: true },
@@ -107,7 +120,10 @@ export class WithdrawalsService {
       this.logger.warn('Ignoring unreadable B2C result');
       return;
     }
-    const withdrawal = await this.prisma.withdrawal.findUnique({ where: { providerReference: result.conversationId }, include: { wallet: true } });
+    const withdrawal = await this.prisma.withdrawal.findUnique({
+      where: { providerReference: result.conversationId },
+      include: { wallet: true },
+    });
     if (!withdrawal || withdrawal.status !== 'APPROVED') return;
 
     await this.prisma.$transaction(async (tx) => {
@@ -120,7 +136,10 @@ export class WithdrawalsService {
         data: { status: 'PAID', providerReceipt: result.transactionId },
       });
       if (count === 0) return;
-      const [pending, clearing] = await Promise.all([this.ledger.systemWallet(tx, 'PAYOUT_PENDING'), this.ledger.systemWallet(tx, 'EXTERNAL_CLEARING')]);
+      const [pending, clearing] = await Promise.all([
+        this.ledger.systemWallet(tx, 'PAYOUT_PENDING'),
+        this.ledger.systemWallet(tx, 'EXTERNAL_CLEARING'),
+      ]);
       await this.ledger.post(tx, {
         type: 'WITHDRAWAL',
         description: `Withdrawal paid ${result.transactionId ?? ''}`.trim(),
@@ -167,7 +186,10 @@ export class WithdrawalsService {
     if (!withdrawal || withdrawal.status !== 'REQUESTED') throw new ConflictException('Only requested withdrawals can be rejected');
     await this.prisma.$transaction(async (tx) => {
       await this.returnFunds(tx, withdrawal, 'REJECTED', reason);
-      await this.audit.log({ actorId: admin.id, action: 'withdrawal.reject', entityType: 'withdrawal', entityId: id, metadata: { reason } }, tx);
+      await this.audit.log(
+        { actorId: admin.id, action: 'withdrawal.reject', entityType: 'withdrawal', entityId: id, metadata: { reason } },
+        tx,
+      );
     });
     return this.view(id);
   }
@@ -180,7 +202,10 @@ export class WithdrawalsService {
     }
     await this.prisma.$transaction(async (tx) => {
       await tx.withdrawal.update({ where: { id }, data: { status: 'PAID', providerReceipt: reference, reviewedById: admin.id } });
-      const [pending, clearing] = await Promise.all([this.ledger.systemWallet(tx, 'PAYOUT_PENDING'), this.ledger.systemWallet(tx, 'EXTERNAL_CLEARING')]);
+      const [pending, clearing] = await Promise.all([
+        this.ledger.systemWallet(tx, 'PAYOUT_PENDING'),
+        this.ledger.systemWallet(tx, 'EXTERNAL_CLEARING'),
+      ]);
       await this.ledger.post(tx, {
         type: 'WITHDRAWAL',
         description: `Bank withdrawal paid ${reference}`,
@@ -190,7 +215,10 @@ export class WithdrawalsService {
           { walletId: clearing.id, amount: withdrawal.amount },
         ],
       });
-      await this.audit.log({ actorId: admin.id, action: 'withdrawal.mark_paid', entityType: 'withdrawal', entityId: id, metadata: { reference } }, tx);
+      await this.audit.log(
+        { actorId: admin.id, action: 'withdrawal.mark_paid', entityType: 'withdrawal', entityId: id, metadata: { reference } },
+        tx,
+      );
     });
     return this.view(id);
   }
@@ -198,7 +226,17 @@ export class WithdrawalsService {
   private view(id: string) {
     return this.prisma.withdrawal.findUniqueOrThrow({
       where: { id },
-      select: { id: true, amount: true, method: true, destination: true, status: true, providerReceipt: true, note: true, createdAt: true, updatedAt: true },
+      select: {
+        id: true,
+        amount: true,
+        method: true,
+        destination: true,
+        status: true,
+        providerReceipt: true,
+        note: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
   }
 }

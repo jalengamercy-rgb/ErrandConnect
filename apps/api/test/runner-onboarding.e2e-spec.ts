@@ -5,8 +5,7 @@ const NEXT_YEAR = `${new Date().getFullYear() + 1}-06-30`;
 
 /** Every onboarding step for a motorcycle runner, with valid answers. */
 async function completeOnboarding(app: INestApplication, runner: TestUser, plate: string) {
-  const put = (path: string, body: object) =>
-    http(app).put(`/runners/me/onboarding/${path}`).set(auth(runner)).send(body).expect(200);
+  const put = (path: string, body: object) => http(app).put(`/runners/me/onboarding/${path}`).set(auth(runner)).send(body).expect(200);
   const upload = (type: string) =>
     http(app).post('/documents').set(auth(runner)).field('type', type).attach('file', TINY_PNG, 'photo.png').expect(201);
 
@@ -17,7 +16,14 @@ async function completeOnboarding(app: INestApplication, runner: TestUser, plate
     nationalIdNumber: '12345678',
     email: `${plate.toLowerCase()}@example.com`,
   });
-  await put('service-area', { county: 'Nairobi', city: 'Nairobi', area: 'Kilimani', preferredAreas: ['Kilimani', 'CBD'], lat: -1.29, lng: 36.78 });
+  await put('service-area', {
+    county: 'Nairobi',
+    city: 'Nairobi',
+    area: 'Kilimani',
+    preferredAreas: ['Kilimani', 'CBD'],
+    lat: -1.29,
+    lng: 36.78,
+  });
   await put('delivery-types', { deliveryTypes: ['MOTORCYCLE', 'WALKING'] });
   await http(app)
     .post('/runners/me/vehicles')
@@ -95,7 +101,13 @@ describe('Runner onboarding & admin review (e2e)', () => {
     const put = (path: string, body: object) => http(app).put(`/runners/me/onboarding/${path}`).set(auth(runner)).send(body);
 
     // Under 18
-    await put('personal', { dateOfBirth: '2015-01-01', gender: 'MALE', nationality: 'Kenyan', nationalIdNumber: '12345678', email: 'kid@example.com' }).expect(400);
+    await put('personal', {
+      dateOfBirth: '2015-01-01',
+      gender: 'MALE',
+      nationality: 'Kenyan',
+      nationalIdNumber: '12345678',
+      email: 'kid@example.com',
+    }).expect(400);
     await put('services', { servicesOffered: ['teleportation'] }).expect(400);
     await put('payout', { type: 'BANK', accountName: 'Test' }).expect(400);
     await put('agreements', { terms: true, privacyPolicy: true, gpsTracking: false, commissionRates: true, infoIsTrue: true }).expect(400);
@@ -143,7 +155,11 @@ describe('Runner onboarding & admin review (e2e)', () => {
     expect(submitted.body.applicationStatus).toBe('SUBMITTED');
     expect(submitted.body.tracker.find((t: { key: string }) => t.key === 'submitted').done).toBe(true);
     // Details are locked after submitting.
-    await http(app).put('/runners/me/onboarding/delivery-types').set(auth(runner)).send({ deliveryTypes: ['CAR'] }).expect(403);
+    await http(app)
+      .put('/runners/me/onboarding/delivery-types')
+      .set(auth(runner))
+      .send({ deliveryTypes: ['CAR'] })
+      .expect(403);
 
     // Customers and runners can't use admin routes.
     await http(app).get('/admin/runners').set(auth(runner)).expect(403);
@@ -201,8 +217,16 @@ describe('Runner onboarding & admin review (e2e)', () => {
       .post('/runners/me/vehicles')
       .set(auth(second))
       .send({
-        type: 'MOTORCYCLE', make: 'TVS', model: 'HLX', color: 'Black', registrationNumber: plate, year: 2021,
-        licenceNumber: 'DL654321', licenceExpiry: NEXT_YEAR, insuranceNumber: 'INS-1', insuranceExpiry: NEXT_YEAR,
+        type: 'MOTORCYCLE',
+        make: 'TVS',
+        model: 'HLX',
+        color: 'Black',
+        registrationNumber: plate,
+        year: 2021,
+        licenceNumber: 'DL654321',
+        licenceExpiry: NEXT_YEAR,
+        insuranceNumber: 'INS-1',
+        insuranceExpiry: NEXT_YEAR,
       })
       .expect(409);
   });
@@ -228,7 +252,12 @@ describe('Runner onboarding & admin review (e2e)', () => {
     const customer = await registerUser(app, 'CUSTOMER');
     await http(app).post(`/admin/customers/${customer.id}/verify-id`).set(auth(support)).expect(400);
 
-    const doc = await http(app).post('/documents').set(auth(customer)).field('type', 'PASSPORT').attach('file', TINY_PNG, 'passport.png').expect(201);
+    const doc = await http(app)
+      .post('/documents')
+      .set(auth(customer))
+      .field('type', 'PASSPORT')
+      .attach('file', TINY_PNG, 'passport.png')
+      .expect(201);
     await http(app).post(`/admin/documents/${doc.body.id}/review`).set(auth(support)).send({ decision: 'APPROVED' }).expect(200);
     const verified = await http(app).post(`/admin/customers/${customer.id}/verify-id`).set(auth(support)).expect(200);
     expect(verified.body.customerProfile.verificationLevel).toBe(3);

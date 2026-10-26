@@ -17,7 +17,12 @@ export function TextField({ label, hint, error, optional, ...input }: TextFieldP
     <View style={styles.field}>
       <ThemedText type="smallBold">
         {label}
-        {optional && <ThemedText type="small" themeColor="textSecondary"> (optional)</ThemedText>}
+        {optional && (
+          <ThemedText type="small" themeColor="textSecondary">
+            {' '}
+            (optional)
+          </ThemedText>
+        )}
       </ThemedText>
       <TextInput
         accessibilityLabel={label}

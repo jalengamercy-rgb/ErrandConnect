@@ -70,16 +70,18 @@ export class UsersService {
   }
 
   async addCustomerProfile(userId: string, tx: Prisma.TransactionClient = this.prisma) {
-    const customerCode = await uniqueCode(newCustomerCode, async (code) =>
-      !!(await tx.customerProfile.findUnique({ where: { customerCode: code } })),
+    const customerCode = await uniqueCode(
+      newCustomerCode,
+      async (code) => !!(await tx.customerProfile.findUnique({ where: { customerCode: code } })),
     );
     await tx.customerProfile.create({ data: { userId, customerCode } });
     await tx.wallet.create({ data: { type: 'CUSTOMER', userId } });
   }
 
   async addRunnerProfile(userId: string, tx: Prisma.TransactionClient = this.prisma) {
-    const runnerCode = await uniqueCode(newRunnerCode, async (code) =>
-      !!(await tx.runnerProfile.findUnique({ where: { runnerCode: code } })),
+    const runnerCode = await uniqueCode(
+      newRunnerCode,
+      async (code) => !!(await tx.runnerProfile.findUnique({ where: { runnerCode: code } })),
     );
     await tx.runnerProfile.create({ data: { userId, runnerCode } });
   }

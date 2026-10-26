@@ -39,7 +39,11 @@ function attachHandlers(socket: Socket, queryClient: QueryClient) {
     queryClient.invalidateQueries({ queryKey: orderKeys.lists });
     queryClient.invalidateQueries({ queryKey: orderKeys.jobs });
     queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
+    // Payments, refunds and payouts change wallet balances.
+    queryClient.invalidateQueries({ queryKey: orderKeys.wallets });
   });
+
+  socket.on('wallet.updated', () => queryClient.invalidateQueries({ queryKey: orderKeys.wallets }));
 
   socket.on('order.message', ({ orderId, message }: { orderId: string; message: ChatMessage }) => {
     queryClient.setQueryData<ChatMessage[]>(orderKeys.messages(orderId), (old) =>

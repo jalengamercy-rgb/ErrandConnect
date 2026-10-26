@@ -34,8 +34,24 @@ const options = <T extends string | number>(values: readonly T[], label: (v: T) 
   values.map((value) => ({ value, label: label(value) }));
 
 const NAIROBI_AREAS = [
-  'CBD', 'Westlands', 'Kilimani', 'Kileleshwa', 'Lavington', 'Parklands', 'Karen', 'Langata', 'Rongai', 'South B',
-  'South C', 'Embakasi', 'Kasarani', 'Roysambu', 'Ruaka', 'Kitengela', 'Syokimau', 'Thika Road',
+  'CBD',
+  'Westlands',
+  'Kilimani',
+  'Kileleshwa',
+  'Lavington',
+  'Parklands',
+  'Karen',
+  'Langata',
+  'Rongai',
+  'South B',
+  'South C',
+  'Embakasi',
+  'Kasarani',
+  'Roysambu',
+  'Ruaka',
+  'Kitengela',
+  'Syokimau',
+  'Thika Road',
 ];
 
 const LANGUAGE_LABELS: Record<string, string> = { ENGLISH: 'English', SWAHILI: 'Swahili', LOCAL_LANGUAGES: 'Local languages' };
@@ -60,7 +76,15 @@ const DELIVERY_TYPE_LABELS: Record<DeliveryType, string> = {
 };
 
 /** Shared layout: title, fields, error and a Save button. */
-function StepForm({ title, subtitle, canSave, saving, error, onSave, children }: {
+function StepForm({
+  title,
+  subtitle,
+  canSave,
+  saving,
+  error,
+  onSave,
+  children,
+}: {
   title: string;
   subtitle?: string;
   canSave: boolean;
@@ -70,7 +94,11 @@ function StepForm({ title, subtitle, canSave, saving, error, onSave, children }:
   children: React.ReactNode;
 }) {
   return (
-    <Screen title={title} subtitle={subtitle} footer={<Button title="Save and continue" disabled={!canSave} loading={saving} onPress={onSave} />}>
+    <Screen
+      title={title}
+      subtitle={subtitle}
+      footer={<Button title="Save and continue" disabled={!canSave} loading={saving} onPress={onSave} />}
+    >
       {children}
       {error && <Notice tone="error">{error.message}</Notice>}
     </Screen>
@@ -92,7 +120,13 @@ function PersonalStep({ data }: StepProps) {
 
   const dobOk = isIsoDate(form.dateOfBirth);
   const whatsappOk = !form.whatsapp || !!normalizeKenyanPhone(form.whatsapp);
-  const ready = dobOk && gender && form.nationality.trim() && /^[A-Za-z0-9]{6,12}$/.test(form.nationalIdNumber) && /\S+@\S+\.\S+/.test(form.email) && whatsappOk;
+  const ready =
+    dobOk &&
+    gender &&
+    form.nationality.trim() &&
+    /^[A-Za-z0-9]{6,12}$/.test(form.nationalIdNumber) &&
+    /\S+@\S+\.\S+/.test(form.email) &&
+    whatsappOk;
 
   return (
     <StepForm
@@ -101,7 +135,8 @@ function PersonalStep({ data }: StepProps) {
       canSave={!!ready}
       saving={save.isPending}
       error={save.error}
-      onSave={() => save.mutate({ ...form, gender, whatsapp: form.whatsapp || undefined })}>
+      onSave={() => save.mutate({ ...form, gender, whatsapp: form.whatsapp || undefined })}
+    >
       <TextField
         label="Date of birth"
         placeholder="YYYY-MM-DD"
@@ -117,7 +152,12 @@ function PersonalStep({ data }: StepProps) {
         onChange={setGender}
       />
       <TextField label="Nationality" value={form.nationality} onChangeText={set('nationality')} />
-      <TextField label="National ID / Passport number" autoCapitalize="characters" value={form.nationalIdNumber} onChangeText={set('nationalIdNumber')} />
+      <TextField
+        label="National ID / Passport number"
+        autoCapitalize="characters"
+        value={form.nationalIdNumber}
+        onChangeText={set('nationalIdNumber')}
+      />
       <TextField label="Email" keyboardType="email-address" autoCapitalize="none" value={form.email} onChangeText={set('email')} />
       <TextField
         label="WhatsApp number"
@@ -137,11 +177,16 @@ function ServiceAreaStep({ data }: StepProps) {
   const [form, setForm] = useState({ county: profile.county ?? 'Nairobi', city: profile.city ?? 'Nairobi', area: profile.area ?? '' });
   const [areas, setAreas] = useState<string[]>(profile.preferredAreas);
   const [otherAreas, setOtherAreas] = useState(profile.preferredAreas.filter((a) => !NAIROBI_AREAS.includes(a)).join(', '));
-  const [location, setLocation] = useState(profile.lastLat !== null && profile.lastLng !== null ? { lat: profile.lastLat, lng: profile.lastLng } : null);
+  const [location, setLocation] = useState(
+    profile.lastLat !== null && profile.lastLng !== null ? { lat: profile.lastLat, lng: profile.lastLng } : null,
+  );
   const locate = useMutation({ mutationFn: getCurrentLocation, onSuccess: setLocation });
   const set = (key: keyof typeof form) => (value: string) => setForm((f) => ({ ...f, [key]: value }));
 
-  const extra = otherAreas.split(',').map((a) => a.trim()).filter(Boolean);
+  const extra = otherAreas
+    .split(',')
+    .map((a) => a.trim())
+    .filter(Boolean);
   const preferredAreas = [...new Set([...areas.filter((a) => NAIROBI_AREAS.includes(a)), ...extra])];
   const ready = form.county.trim().length >= 2 && form.city.trim().length >= 2 && form.area.trim().length >= 2 && preferredAreas.length > 0;
 
@@ -151,7 +196,8 @@ function ServiceAreaStep({ data }: StepProps) {
       canSave={ready}
       saving={save.isPending}
       error={save.error ?? locate.error}
-      onSave={() => save.mutate({ ...form, preferredAreas, ...location })}>
+      onSave={() => save.mutate({ ...form, preferredAreas, ...location })}
+    >
       <TextField label="County" value={form.county} onChangeText={set('county')} />
       <TextField label="City / town" value={form.city} onChangeText={set('city')} />
       <TextField label="Estate / neighbourhood where you live" value={form.area} onChangeText={set('area')} />
@@ -161,8 +207,19 @@ function ServiceAreaStep({ data }: StepProps) {
         loading={locate.isPending}
         onPress={() => locate.mutate()}
       />
-      <MultiChoiceChips label="Preferred working areas" choices={NAIROBI_AREAS.map((a) => ({ value: a, label: a }))} value={areas} onChange={setAreas} />
-      <TextField label="Other areas" optional hint="Separate with commas, e.g. Nakuru CBD, Milimani" value={otherAreas} onChangeText={setOtherAreas} />
+      <MultiChoiceChips
+        label="Preferred working areas"
+        choices={NAIROBI_AREAS.map((a) => ({ value: a, label: a }))}
+        value={areas}
+        onChange={setAreas}
+      />
+      <TextField
+        label="Other areas"
+        optional
+        hint="Separate with commas, e.g. Nakuru CBD, Milimani"
+        value={otherAreas}
+        onChangeText={setOtherAreas}
+      />
     </StepForm>
   );
 }
@@ -172,7 +229,14 @@ function DeliveryTypesStep({ data }: StepProps) {
   const [types, setTypes] = useState<DeliveryType[]>(data.answers.profile.deliveryTypes);
   const motorized = types.some((t) => MOTORIZED_DELIVERY_TYPES.includes(t));
   return (
-    <StepForm title="How do you deliver?" subtitle="Select all that apply." canSave={types.length > 0} saving={save.isPending} error={save.error} onSave={() => save.mutate({ deliveryTypes: types })}>
+    <StepForm
+      title="How do you deliver?"
+      subtitle="Select all that apply."
+      canSave={types.length > 0}
+      saving={save.isPending}
+      error={save.error}
+      onSave={() => save.mutate({ deliveryTypes: types })}
+    >
       <MultiChoiceChips choices={options(DELIVERY_TYPES, (t) => DELIVERY_TYPE_LABELS[t])} value={types} onChange={setTypes} />
       {motorized && <Notice>You&apos;ll add vehicle, licence and insurance details in the next step.</Notice>}
     </StepForm>
@@ -203,9 +267,27 @@ function PayoutStep({ data }: StepProps) {
       : { type, accountName: form.accountName, bankName: form.bankName, accountNumber: form.accountNumber, branch: form.branch };
 
   return (
-    <StepForm title="How should we pay you?" subtitle="Your earnings are sent here." canSave={ready} saving={save.isPending} error={save.error} onSave={() => save.mutate(body)}>
-      <ChoiceChips choices={[{ value: 'MPESA', label: 'M-Pesa' }, { value: 'BANK', label: 'Bank' }]} value={type} onChange={setType} />
-      <TextField label={type === 'MPESA' ? 'Registered M-Pesa name' : 'Account name'} value={form.accountName} onChangeText={set('accountName')} />
+    <StepForm
+      title="How should we pay you?"
+      subtitle="Your earnings are sent here."
+      canSave={ready}
+      saving={save.isPending}
+      error={save.error}
+      onSave={() => save.mutate(body)}
+    >
+      <ChoiceChips
+        choices={[
+          { value: 'MPESA', label: 'M-Pesa' },
+          { value: 'BANK', label: 'Bank' },
+        ]}
+        value={type}
+        onChange={setType}
+      />
+      <TextField
+        label={type === 'MPESA' ? 'Registered M-Pesa name' : 'Account name'}
+        value={form.accountName}
+        onChangeText={set('accountName')}
+      />
       {type === 'MPESA' ? (
         <TextField label="M-Pesa phone number" keyboardType="phone-pad" value={form.phone} onChangeText={set('phone')} />
       ) : (
@@ -240,12 +322,21 @@ function WorkPreferencesStep({ data }: StepProps) {
       canSave={ready}
       saving={save.isPending}
       error={save.error}
-      onSave={() => save.mutate({ availability, workingDays: days, workStartTime: start, workEndTime: end, maxDistanceKm: distance || null })}>
+      onSave={() =>
+        save.mutate({ availability, workingDays: days, workStartTime: start, workEndTime: end, maxDistanceKm: distance || null })
+      }
+    >
       <ChoiceChips label="Availability" choices={options(AVAILABILITY)} value={availability} onChange={setAvailability} />
       <MultiChoiceChips label="Working days" choices={options(WEEKDAYS)} value={days} onChange={setDays} />
       <View style={styles.row}>
         <View style={styles.half}>
-          <TextField label="Start time" placeholder="08:00" value={start} onChangeText={setStart} error={!TIME.test(start) ? 'HH:MM' : undefined} />
+          <TextField
+            label="Start time"
+            placeholder="08:00"
+            value={start}
+            onChangeText={setStart}
+            error={!TIME.test(start) ? 'HH:MM' : undefined}
+          />
         </View>
         <View style={styles.half}>
           <TextField label="End time" placeholder="18:00" value={end} onChangeText={setEnd} error={!TIME.test(end) ? 'HH:MM' : undefined} />
@@ -266,8 +357,19 @@ function ServicesStep({ data }: StepProps) {
   const { data: categories } = useCategories();
   const [services, setServices] = useState<string[]>(data.answers.profile.servicesOffered);
   return (
-    <StepForm title="Services you offer" subtitle="Select all that apply." canSave={services.length > 0} saving={save.isPending} error={save.error} onSave={() => save.mutate({ servicesOffered: services })}>
-      <MultiChoiceChips choices={(categories ?? []).map((c) => ({ value: c.slug, label: c.name }))} value={services} onChange={setServices} />
+    <StepForm
+      title="Services you offer"
+      subtitle="Select all that apply."
+      canSave={services.length > 0}
+      saving={save.isPending}
+      error={save.error}
+      onSave={() => save.mutate({ servicesOffered: services })}
+    >
+      <MultiChoiceChips
+        choices={(categories ?? []).map((c) => ({ value: c.slug, label: c.name }))}
+        value={services}
+        onChange={setServices}
+      />
     </StepForm>
   );
 }
@@ -292,15 +394,38 @@ function ExperienceStep({ data }: StepProps) {
       onSave={() =>
         save.mutate({
           hasDeliveryExperience: experienced === 'yes',
-          ...(experienced === 'yes' ? { previousCompany: company || undefined, yearsExperience: toInt(years), avgDeliveriesPerDay: toInt(perDay) } : {}),
+          ...(experienced === 'yes'
+            ? { previousCompany: company || undefined, yearsExperience: toInt(years), avgDeliveriesPerDay: toInt(perDay) }
+            : {}),
         })
-      }>
-      <ChoiceChips label="Have you worked as a delivery rider before?" choices={[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]} value={experienced} onChange={setExperienced} />
+      }
+    >
+      <ChoiceChips
+        label="Have you worked as a delivery rider before?"
+        choices={[
+          { value: 'yes', label: 'Yes' },
+          { value: 'no', label: 'No' },
+        ]}
+        value={experienced}
+        onChange={setExperienced}
+      />
       {experienced === 'yes' && (
         <>
           <TextField label="Previous company" optional value={company} onChangeText={setCompany} />
-          <TextField label="Years of experience" optional keyboardType="number-pad" value={years} onChangeText={(t) => setYears(t.replace(/\D/g, ''))} />
-          <TextField label="Average deliveries per day" optional keyboardType="number-pad" value={perDay} onChangeText={(t) => setPerDay(t.replace(/\D/g, ''))} />
+          <TextField
+            label="Years of experience"
+            optional
+            keyboardType="number-pad"
+            value={years}
+            onChangeText={(t) => setYears(t.replace(/\D/g, ''))}
+          />
+          <TextField
+            label="Average deliveries per day"
+            optional
+            keyboardType="number-pad"
+            value={perDay}
+            onChangeText={(t) => setPerDay(t.replace(/\D/g, ''))}
+          />
         </>
       )}
     </StepForm>
@@ -311,8 +436,19 @@ function EquipmentStep({ data }: StepProps) {
   const save = useSaveStep('equipment');
   const [equipment, setEquipment] = useState<string[]>(data.answers.profile.equipment);
   return (
-    <StepForm title="Equipment" subtitle="Tick everything you have." canSave saving={save.isPending} error={save.error} onSave={() => save.mutate({ equipment })}>
-      <MultiChoiceChips choices={options(RUNNER_EQUIPMENT, (e) => EQUIPMENT_LABELS[e] ?? humanize(e))} value={equipment} onChange={setEquipment} />
+    <StepForm
+      title="Equipment"
+      subtitle="Tick everything you have."
+      canSave
+      saving={save.isPending}
+      error={save.error}
+      onSave={() => save.mutate({ equipment })}
+    >
+      <MultiChoiceChips
+        choices={options(RUNNER_EQUIPMENT, (e) => EQUIPMENT_LABELS[e] ?? humanize(e))}
+        value={equipment}
+        onChange={setEquipment}
+      />
     </StepForm>
   );
 }
@@ -322,8 +458,19 @@ function SkillsStep({ data }: StepProps) {
   const [languages, setLanguages] = useState<string[]>(data.answers.profile.languages);
   const [skills, setSkills] = useState<string[]>(data.answers.profile.skills);
   return (
-    <StepForm title="Skills" canSave={languages.length > 0} saving={save.isPending} error={save.error} onSave={() => save.mutate({ languages, skills })}>
-      <MultiChoiceChips label="Languages you speak" choices={options(RUNNER_LANGUAGES, (l) => LANGUAGE_LABELS[l] ?? humanize(l))} value={languages} onChange={setLanguages} />
+    <StepForm
+      title="Skills"
+      canSave={languages.length > 0}
+      saving={save.isPending}
+      error={save.error}
+      onSave={() => save.mutate({ languages, skills })}
+    >
+      <MultiChoiceChips
+        label="Languages you speak"
+        choices={options(RUNNER_LANGUAGES, (l) => LANGUAGE_LABELS[l] ?? humanize(l))}
+        value={languages}
+        onChange={setLanguages}
+      />
       <MultiChoiceChips label="Other skills" choices={options(RUNNER_SKILLS)} value={skills} onChange={setSkills} />
     </StepForm>
   );
@@ -331,7 +478,10 @@ function SkillsStep({ data }: StepProps) {
 
 type YesNo = 'yes' | 'no' | null;
 const toYesNo = (v: boolean | null): YesNo => (v === null ? null : v ? 'yes' : 'no');
-const YES_NO = [{ value: 'yes' as const, label: 'Yes' }, { value: 'no' as const, label: 'No' }];
+const YES_NO = [
+  { value: 'yes' as const, label: 'Yes' },
+  { value: 'no' as const, label: 'No' },
+];
 
 function BackgroundStep({ data }: StepProps) {
   const { profile } = data.answers;
@@ -357,7 +507,8 @@ function BackgroundStep({ data }: StepProps) {
           agreeToIdVerification: idCheck,
           agreeToBackgroundCheck: backgroundCheck,
         })
-      }>
+      }
+    >
       <ChoiceChips label="Have you ever been convicted of a crime?" choices={YES_NO} value={criminal} onChange={setCriminal} />
       <ChoiceChips label="Can you lift heavy packages?" choices={YES_NO} value={heavy} onChange={setHeavy} />
       <ChoiceChips label="Are you willing to handle cash?" choices={YES_NO} value={cash} onChange={setCash} />
@@ -372,7 +523,14 @@ function AgreementsStep(_: StepProps) {
   const [agree, setAgree] = useState({ terms: false, privacyPolicy: false, gpsTracking: false, commissionRates: false, infoIsTrue: false });
   const toggle = (key: keyof typeof agree) => (value: boolean) => setAgree((a) => ({ ...a, [key]: value }));
   return (
-    <StepForm title="Agreements" subtitle="All are required to work on ErrandCONNECT." canSave={Object.values(agree).every(Boolean)} saving={save.isPending} error={save.error} onSave={() => save.mutate(agree)}>
+    <StepForm
+      title="Agreements"
+      subtitle="All are required to work on ErrandCONNECT."
+      canSave={Object.values(agree).every(Boolean)}
+      saving={save.isPending}
+      error={save.error}
+      onSave={() => save.mutate(agree)}
+    >
       <Checkbox label="I agree to the Terms & Conditions" checked={agree.terms} onChange={toggle('terms')} />
       <Checkbox label="I agree to the Privacy Policy" checked={agree.privacyPolicy} onChange={toggle('privacyPolicy')} />
       <Checkbox label="I consent to GPS tracking while I'm online" checked={agree.gpsTracking} onChange={toggle('gpsTracking')} />

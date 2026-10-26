@@ -37,7 +37,8 @@ function Chips<T extends string | number>({ label, choices, isSelected, onPress,
                   backgroundColor: selected ? theme.primarySoft : theme.backgroundElement,
                   borderColor: selected ? theme.primary : theme.border,
                 },
-              ]}>
+              ]}
+            >
               <ThemedText type="small" style={{ color: selected ? theme.primary : theme.text }}>
                 {selected && multiple ? '✓ ' : ''}
                 {choice.label}
@@ -51,7 +52,11 @@ function Chips<T extends string | number>({ label, choices, isSelected, onPress,
 }
 
 /** Tappable options where exactly one can be chosen (like radio buttons). */
-export function ChoiceChips<T extends string | number>({ value, onChange, ...rest }: {
+export function ChoiceChips<T extends string | number>({
+  value,
+  onChange,
+  ...rest
+}: {
   label?: string;
   choices: readonly Choice<T>[];
   value: T | null;
@@ -61,7 +66,11 @@ export function ChoiceChips<T extends string | number>({ value, onChange, ...res
 }
 
 /** Tappable options where any number can be chosen (like checkboxes). */
-export function MultiChoiceChips<T extends string | number>({ value, onChange, ...rest }: {
+export function MultiChoiceChips<T extends string | number>({
+  value,
+  onChange,
+  ...rest
+}: {
   label?: string;
   choices: readonly Choice<T>[];
   value: T[];

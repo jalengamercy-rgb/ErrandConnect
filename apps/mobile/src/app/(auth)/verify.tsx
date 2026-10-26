@@ -11,7 +11,11 @@ import { api } from '@/lib/api';
 
 /** Step 2: enter the SMS code. */
 export default function VerifyScreen() {
-  const { phone, purpose, accountType } = useLocalSearchParams<{ phone: string; purpose: 'REGISTER' | 'RESET_PASSWORD'; accountType: string }>();
+  const { phone, purpose, accountType } = useLocalSearchParams<{
+    phone: string;
+    purpose: 'REGISTER' | 'RESET_PASSWORD';
+    accountType: string;
+  }>();
   const [code, setCode] = useState('');
 
   const verify = useMutation({
@@ -31,7 +35,8 @@ export default function VerifyScreen() {
     <Screen
       title="Enter the code"
       subtitle={`We sent a 6-digit code to ${phone}.`}
-      footer={<Button title="Verify" disabled={code.length !== 6} loading={verify.isPending} onPress={() => verify.mutate()} />}>
+      footer={<Button title="Verify" disabled={code.length !== 6} loading={verify.isPending} onPress={() => verify.mutate()} />}
+    >
       <TextField
         label="Verification code"
         placeholder="123456"

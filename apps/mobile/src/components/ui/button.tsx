@@ -21,7 +21,8 @@ export function Button({ title, onPress, variant = 'primary', loading, disabled 
     ghost: 'transparent',
     danger: theme.danger,
   }[variant];
-  const color = variant === 'primary' ? theme.onPrimary : variant === 'danger' ? '#ffffff' : variant === 'ghost' ? theme.primary : theme.text;
+  const color =
+    variant === 'primary' ? theme.onPrimary : variant === 'danger' ? '#ffffff' : variant === 'ghost' ? theme.primary : theme.text;
 
   return (
     <Pressable
@@ -34,7 +35,8 @@ export function Button({ title, onPress, variant = 'primary', loading, disabled 
         { backgroundColor: background, opacity: inactive ? 0.5 : pressed ? 0.8 : 1 },
         // Outlined so it stays visible on cards, which share the same background colour.
         variant === 'secondary' && { borderWidth: 1, borderColor: theme.border },
-      ]}>
+      ]}
+    >
       {loading ? <ActivityIndicator color={color} /> : <ThemedText style={[styles.label, { color }]}>{title}</ThemedText>}
     </Pressable>
   );

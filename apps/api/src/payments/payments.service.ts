@@ -1,4 +1,13 @@
-import { BadRequestException, ConflictException, HttpException, HttpStatus, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  NotFoundException,
+  OnModuleInit,
+} from '@nestjs/common';
 import type { Order, Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { DispatchService } from '../realtime/dispatch.service.js';
@@ -48,7 +57,8 @@ export class PaymentsService implements OnModuleInit {
     const recent = await this.prisma.payment.findFirst({
       where: { orderId: order.id, status: 'PENDING', createdAt: { gt: new Date(Date.now() - STK_RESEND_COOLDOWN_MS) } },
     });
-    if (recent) throw new HttpException('A payment request was just sent. Check your phone or try again in 30 seconds', HttpStatus.TOO_MANY_REQUESTS);
+    if (recent)
+      throw new HttpException('A payment request was just sent. Check your phone or try again in 30 seconds', HttpStatus.TOO_MANY_REQUESTS);
 
     try {
       const response = await this.mpesa.stkPush({
@@ -81,14 +91,21 @@ export class PaymentsService implements OnModuleInit {
   }
 
   private async settleStk(result: StkCallbackResult, raw: unknown) {
-    const payment = await this.prisma.payment.findUnique({ where: { providerRequestId: result.checkoutRequestId }, include: { order: true } });
+    const payment = await this.prisma.payment.findUnique({
+      where: { providerRequestId: result.checkoutRequestId },
+      include: { order: true },
+    });
     if (!payment || payment.status !== 'PENDING') return;
     const order = payment.order;
 
     if (result.resultCode !== 0) {
       await this.prisma.payment.updateMany({
         where: { id: payment.id, status: 'PENDING' },
-        data: { status: result.resultCode === 1032 ? 'CANCELLED' : 'FAILED', failureReason: result.resultDesc, rawCallback: raw as Prisma.InputJsonValue },
+        data: {
+          status: result.resultCode === 1032 ? 'CANCELLED' : 'FAILED',
+          failureReason: result.resultDesc,
+          rawCallback: raw as Prisma.InputJsonValue,
+        },
       });
       if (order) this.dispatch.orderUpdated(order.id, order.customerId, null, order.status);
       return;
@@ -102,7 +119,10 @@ export class PaymentsService implements OnModuleInit {
         data: { status: 'SUCCEEDED', providerReceipt: result.receipt, rawCallback: raw as Prisma.InputJsonValue },
       });
       if (count === 0) return; // another callback got here first
-      const [clearing, escrow] = await Promise.all([this.ledger.systemWallet(tx, 'EXTERNAL_CLEARING'), this.ledger.systemWallet(tx, 'ESCROW')]);
+      const [clearing, escrow] = await Promise.all([
+        this.ledger.systemWallet(tx, 'EXTERNAL_CLEARING'),
+        this.ledger.systemWallet(tx, 'ESCROW'),
+      ]);
       await this.ledger.post(tx, {
         type: 'PAYMENT_IN',
         description: `M-Pesa payment ${result.receipt ?? ''}`.trim(),
@@ -117,12 +137,27 @@ export class PaymentsService implements OnModuleInit {
       if (order && order.status === 'AWAITING_PAYMENT' && amount >= order.total) {
         await tx.escrow.create({ data: { orderId: order.id, amount: order.total } });
         // Anything paid above the total goes to the customer's wallet.
-        if (amount > order.total) await this.toCustomerWallet(tx, order, amount - order.total, `Overpayment on ${order.orderNumber}`, `overpay:${result.checkoutRequestId}`);
+        if (amount > order.total)
+          await this.toCustomerWallet(
+            tx,
+            order,
+            amount - order.total,
+            `Overpayment on ${order.orderNumber}`,
+            `overpay:${result.checkoutRequestId}`,
+          );
         paidOrder = await tx.order.update({ where: { id: order.id }, data: { status: 'PENDING', paidAt: new Date() } });
-        await tx.orderEvent.create({ data: { orderId: order.id, status: 'PENDING', note: `Paid via M-Pesa ${result.receipt ?? ''}`.trim() } });
+        await tx.orderEvent.create({
+          data: { orderId: order.id, status: 'PENDING', note: `Paid via M-Pesa ${result.receipt ?? ''}`.trim() },
+        });
       } else if (order) {
         // Paid too little, or the errand was cancelled while paying: keep the money safe in their wallet.
-        await this.toCustomerWallet(tx, order, amount, `M-Pesa payment for ${order.orderNumber} credited to wallet`, `credit:${result.checkoutRequestId}`);
+        await this.toCustomerWallet(
+          tx,
+          order,
+          amount,
+          `M-Pesa payment for ${order.orderNumber} credited to wallet`,
+          `credit:${result.checkoutRequestId}`,
+        );
       }
     });
 
@@ -131,7 +166,10 @@ export class PaymentsService implements OnModuleInit {
   }
 
   private async toCustomerWallet(tx: Tx, order: Order, amount: number, description: string, idempotencyKey: string) {
-    const [escrow, wallet] = await Promise.all([this.ledger.systemWallet(tx, 'ESCROW'), this.ledger.userWallet(tx, order.customerId, 'CUSTOMER')]);
+    const [escrow, wallet] = await Promise.all([
+      this.ledger.systemWallet(tx, 'ESCROW'),
+      this.ledger.userWallet(tx, order.customerId, 'CUSTOMER'),
+    ]);
     await this.ledger.post(tx, {
       type: 'REFUND',
       description,
@@ -146,11 +184,17 @@ export class PaymentsService implements OnModuleInit {
 
   /** Asks M-Pesa directly about a payment whose callback hasn't arrived. */
   async refresh(orderId: string, customerId: string) {
-    const payment = await this.prisma.payment.findFirst({ where: { orderId, status: 'PENDING', order: { customerId } }, orderBy: { createdAt: 'desc' } });
+    const payment = await this.prisma.payment.findFirst({
+      where: { orderId, status: 'PENDING', order: { customerId } },
+      orderBy: { createdAt: 'desc' },
+    });
     if (!payment?.providerRequestId) return { status: 'NO_PENDING_PAYMENT' };
     const query = await this.mpesa.stkQuery(payment.providerRequestId);
     if (query.resultCode !== null) {
-      await this.settleStk({ checkoutRequestId: payment.providerRequestId, resultCode: query.resultCode, resultDesc: query.resultDesc }, { query });
+      await this.settleStk(
+        { checkoutRequestId: payment.providerRequestId, resultCode: query.resultCode, resultDesc: query.resultDesc },
+        { query },
+      );
     }
     const latest = await this.prisma.payment.findUniqueOrThrow({ where: { id: payment.id } });
     return { status: latest.status, reason: latest.failureReason };
@@ -169,7 +213,10 @@ export class PaymentsService implements OnModuleInit {
 
   /** Pays for a new order from the customer's wallet balance. */
   async holdFromWallet(tx: Tx, order: Order) {
-    const [wallet, escrow] = await Promise.all([this.ledger.userWallet(tx, order.customerId, 'CUSTOMER'), this.ledger.systemWallet(tx, 'ESCROW')]);
+    const [wallet, escrow] = await Promise.all([
+      this.ledger.userWallet(tx, order.customerId, 'CUSTOMER'),
+      this.ledger.systemWallet(tx, 'ESCROW'),
+    ]);
     await this.ledger.post(tx, {
       type: 'ESCROW_HOLD',
       description: `Payment for ${order.orderNumber}`,
@@ -185,7 +232,10 @@ export class PaymentsService implements OnModuleInit {
 
   /** Delivery confirmed: pay the runner and the platform from escrow. */
   async releaseEscrow(tx: Tx, order: Order, runnerId: string) {
-    const held = await tx.escrow.updateMany({ where: { orderId: order.id, status: 'HELD' }, data: { status: 'RELEASED', releasedAt: new Date() } });
+    const held = await tx.escrow.updateMany({
+      where: { orderId: order.id, status: 'HELD' },
+      data: { status: 'RELEASED', releasedAt: new Date() },
+    });
     if (held.count === 0) throw new ConflictException('Payment for this errand is on hold. Please contact support');
     const [escrow, runner, platform] = await Promise.all([
       this.ledger.systemWallet(tx, 'ESCROW'),
@@ -207,7 +257,10 @@ export class PaymentsService implements OnModuleInit {
 
   /** Cash errand completed: the runner collected everything, so they owe the platform its fee. */
   async chargeCashCommission(tx: Tx, order: Order, runnerId: string) {
-    const [runner, platform] = await Promise.all([this.ledger.userWallet(tx, runnerId, 'RUNNER'), this.ledger.systemWallet(tx, 'PLATFORM_REVENUE')]);
+    const [runner, platform] = await Promise.all([
+      this.ledger.userWallet(tx, runnerId, 'RUNNER'),
+      this.ledger.systemWallet(tx, 'PLATFORM_REVENUE'),
+    ]);
     await this.ledger.post(tx, {
       type: 'ADJUSTMENT',
       description: `Platform fee for cash errand ${order.orderNumber}`,
@@ -222,7 +275,10 @@ export class PaymentsService implements OnModuleInit {
 
   /** Cancelled after paying: everything goes back to the customer's wallet. */
   async refundEscrow(tx: Tx, order: Order) {
-    const held = await tx.escrow.updateMany({ where: { orderId: order.id, status: 'HELD' }, data: { status: 'REFUNDED', releasedAt: new Date() } });
+    const held = await tx.escrow.updateMany({
+      where: { orderId: order.id, status: 'HELD' },
+      data: { status: 'REFUNDED', releasedAt: new Date() },
+    });
     if (held.count === 0) return false;
     await this.toCustomerWallet(tx, order, order.total, `Refund for cancelled errand ${order.orderNumber}`, `refund:${order.id}`);
     return true;

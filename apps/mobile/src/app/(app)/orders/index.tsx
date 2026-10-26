@@ -21,13 +21,29 @@ export default function OrdersScreen() {
   return (
     <Screen footer={me?.customerProfile && <Button title="New errand" onPress={() => router.push('/orders/new')} />}>
       {me?.customerProfile && me.runnerProfile && (
-        <ChoiceChips choices={[{ value: 'customer', label: 'My errands' }, { value: 'runner', label: 'Jobs I ran' }]} value={as} onChange={setAs} />
+        <ChoiceChips
+          choices={[
+            { value: 'customer', label: 'My errands' },
+            { value: 'runner', label: 'Jobs I ran' },
+          ]}
+          value={as}
+          onChange={setAs}
+        />
       )}
-      <ChoiceChips choices={[{ value: 'active', label: 'Active' }, { value: 'past', label: 'Past' }]} value={scope} onChange={setScope} />
+      <ChoiceChips
+        choices={[
+          { value: 'active', label: 'Active' },
+          { value: 'past', label: 'Past' },
+        ]}
+        value={scope}
+        onChange={setScope}
+      />
       {query.isLoading && <Loading />}
       {query.error && <Notice tone="error">{query.error.message}</Notice>}
       {query.data?.length === 0 && <Notice>{scope === 'active' ? 'Nothing in progress.' : 'No past errands yet.'}</Notice>}
-      {query.data?.map((order) => <OrderRow key={order.id} order={order} />)}
+      {query.data?.map((order) => (
+        <OrderRow key={order.id} order={order} />
+      ))}
     </Screen>
   );
 }

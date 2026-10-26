@@ -5,14 +5,7 @@ import {
   RUNNER_REQUIRED_AGREEMENTS,
   type RunnerOnboardingStepKey,
 } from '@errandconnect/shared';
-import type {
-  ConsentType,
-  Document,
-  DocumentType,
-  RunnerProfile,
-  User,
-  Vehicle,
-} from '../generated/prisma/client.js';
+import type { ConsentType, Document, DocumentType, RunnerProfile, User, Vehicle } from '../generated/prisma/client.js';
 
 /** Everything needed to work out how far a runner has got. */
 export interface OnboardingState {
@@ -52,18 +45,14 @@ function vehicleComplete(vehicle: Vehicle, now: Date): boolean {
 }
 
 const STEP_CHECKS: Record<RunnerOnboardingStepKey, (s: OnboardingState, now: Date) => boolean> = {
-  personal: ({ user, profile }) =>
-    !!user.email && !!user.dateOfBirth && !!user.gender && !!user.nationality && !!profile.nationalIdNumber,
+  personal: ({ user, profile }) => !!user.email && !!user.dateOfBirth && !!user.gender && !!user.nationality && !!profile.nationalIdNumber,
   'service-area': ({ profile }) => !!profile.county && !!profile.city && !!profile.area && profile.preferredAreas.length > 0,
   'delivery-types': ({ profile }) => profile.deliveryTypes.length > 0,
   // Every motorized delivery type needs a complete vehicle of that type, plus a vehicle photo.
   vehicles: (s, now) => {
     const motorized = s.profile.deliveryTypes.filter((t) => MOTORIZED_DELIVERY_TYPES.includes(t));
     if (motorized.length === 0) return s.profile.deliveryTypes.length > 0;
-    return (
-      motorized.every((type) => s.vehicles.some((v) => v.type === type && vehicleComplete(v, now))) &&
-      hasDocument(s, 'VEHICLE_PHOTO')
-    );
+    return motorized.every((type) => s.vehicles.some((v) => v.type === type && vehicleComplete(v, now))) && hasDocument(s, 'VEHICLE_PHOTO');
   },
   identity: (s) => IDENTITY_DOCUMENTS.every((type) => hasDocument(s, type)),
   'emergency-contact': (s) => s.hasEmergencyContact,

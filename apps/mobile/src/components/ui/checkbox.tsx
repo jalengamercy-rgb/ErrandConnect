@@ -13,16 +13,13 @@ interface CheckboxProps {
 export function Checkbox({ label, checked, onChange }: CheckboxProps) {
   const theme = useTheme();
   return (
-    <Pressable
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked }}
-      onPress={() => onChange(!checked)}
-      style={styles.row}>
+    <Pressable accessibilityRole="checkbox" accessibilityState={{ checked }} onPress={() => onChange(!checked)} style={styles.row}>
       <View
         style={[
           styles.box,
           { borderColor: checked ? theme.primary : theme.border, backgroundColor: checked ? theme.primary : 'transparent' },
-        ]}>
+        ]}
+      >
         {checked && <ThemedText style={[styles.tick, { color: theme.onPrimary }]}>✓</ThemedText>}
       </View>
       <ThemedText style={styles.label}>{label}</ThemedText>

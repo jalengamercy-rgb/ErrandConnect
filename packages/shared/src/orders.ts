@@ -6,13 +6,37 @@ export const RUNNER_PROGRESS_STATUSES = ['AT_STORE', 'PICKED_UP', 'IN_TRANSIT'] 
 export type RunnerProgressStatus = (typeof RUNNER_PROGRESS_STATUSES)[number];
 
 /** The normal life of an order, used to decide which moves are forward. */
-const FLOW: OrderStatus[] = ['AWAITING_PAYMENT', 'PENDING', 'ACCEPTED', 'RUNNER_ASSIGNED', 'AT_STORE', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'];
+const FLOW: OrderStatus[] = [
+  'AWAITING_PAYMENT',
+  'PENDING',
+  'ACCEPTED',
+  'RUNNER_ASSIGNED',
+  'AT_STORE',
+  'PICKED_UP',
+  'IN_TRANSIT',
+  'DELIVERED',
+  'COMPLETED',
+];
 
-export const ACTIVE_ORDER_STATUSES: readonly OrderStatus[] = ['AWAITING_PAYMENT', 'PENDING', 'ACCEPTED', 'RUNNER_ASSIGNED', 'AT_STORE', 'PICKED_UP', 'IN_TRANSIT'];
+export const ACTIVE_ORDER_STATUSES: readonly OrderStatus[] = [
+  'AWAITING_PAYMENT',
+  'PENDING',
+  'ACCEPTED',
+  'RUNNER_ASSIGNED',
+  'AT_STORE',
+  'PICKED_UP',
+  'IN_TRANSIT',
+];
 /** A runner is working on the order. */
 export const RUNNER_ACTIVE_STATUSES: readonly OrderStatus[] = ['ACCEPTED', 'RUNNER_ASSIGNED', 'AT_STORE', 'PICKED_UP', 'IN_TRANSIT'];
 /** Customers can cancel until the runner has picked the items up. */
-export const CUSTOMER_CANCELLABLE_STATUSES: readonly OrderStatus[] = ['AWAITING_PAYMENT', 'PENDING', 'ACCEPTED', 'RUNNER_ASSIGNED', 'AT_STORE'];
+export const CUSTOMER_CANCELLABLE_STATUSES: readonly OrderStatus[] = [
+  'AWAITING_PAYMENT',
+  'PENDING',
+  'ACCEPTED',
+  'RUNNER_ASSIGNED',
+  'AT_STORE',
+];
 /** Runners can hand a job back (it goes back to PENDING) until they've picked items up. */
 export const RUNNER_RELEASABLE_STATUSES: readonly OrderStatus[] = ['ACCEPTED', 'RUNNER_ASSIGNED', 'AT_STORE'];
 

@@ -17,10 +17,7 @@ describe('Public endpoints (e2e)', () => {
   });
 
   it('POST /pricing/quote returns a balanced price breakdown', async () => {
-    const res = await http(app)
-      .post('/pricing/quote')
-      .send({ errandFee: 2000, distanceKm: 2, deliveryType: 'MOTORCYCLE' })
-      .expect(200);
+    const res = await http(app).post('/pricing/quote').send({ errandFee: 2000, distanceKm: 2, deliveryType: 'MOTORCYCLE' }).expect(200);
 
     expect(res.body.customer.total).toBe(2250);
     expect(res.body.runner.total + res.body.platform.total).toBe(res.body.customer.total);

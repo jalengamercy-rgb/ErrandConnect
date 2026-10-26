@@ -82,15 +82,27 @@ describe('Errands (e2e)', () => {
 
   it('delivers to a saved address', async () => {
     const customer = await registerUser(app, 'CUSTOMER');
-    const address = await http(app).post('/me/addresses').set(auth(customer)).send({ label: 'Office', area: 'Westlands', ...WESTLANDS }).expect(201);
+    const address = await http(app)
+      .post('/me/addresses')
+      .set(auth(customer))
+      .send({ label: 'Office', area: 'Westlands', ...WESTLANDS })
+      .expect(201);
     const { dropoff: _dropoff, ...rest } = errand();
-    const order = await http(app).post('/orders').set(auth(customer)).send({ ...rest, dropoffAddressId: address.body.id }).expect(201);
+    const order = await http(app)
+      .post('/orders')
+      .set(auth(customer))
+      .send({ ...rest, dropoffAddressId: address.body.id })
+      .expect(201);
     const { dropoff: _d2, ...quoteRest } = details();
     expect(order.body.dropoffLabel).toBe('Office');
     expect(order.body.dropoffAddress).toBe('Westlands');
 
     const stranger = await registerUser(app, 'CUSTOMER');
-    await http(app).post('/orders/quote').set(auth(stranger)).send({ ...quoteRest, dropoffAddressId: address.body.id }).expect(404);
+    await http(app)
+      .post('/orders/quote')
+      .set(auth(stranger))
+      .send({ ...quoteRest, dropoffAddressId: address.body.id })
+      .expect(404);
   });
 
   it('runs a full errand: post → match → accept → progress → chat → PIN → rate', async () => {
@@ -113,7 +125,12 @@ describe('Errands (e2e)', () => {
     // Nearby runner sees it with distance and earnings; far-away runner doesn't.
     const jobs = await http(app).get('/runners/me/jobs').set(auth(runner)).expect(200);
     const job = jobs.body.find((j: { id: string }) => j.id === orderId);
-    expect(job).toMatchObject({ awayKm: 0, runnerEarnings: created.body.runnerEarnings, runnerFee: created.body.runnerEarnings - 400, category: 'Grocery Shopping' });
+    expect(job).toMatchObject({
+      awayKm: 0,
+      runnerEarnings: created.body.runnerEarnings,
+      runnerFee: created.body.runnerEarnings - 400,
+      category: 'Grocery Shopping',
+    });
     expect(job).not.toHaveProperty('deliveryPin');
     const farJobs = await http(app).get('/runners/me/jobs').set(auth(farRunner)).expect(200);
     expect(farJobs.body.some((j: { id: string }) => j.id === orderId)).toBe(false);
@@ -162,7 +179,14 @@ describe('Errands (e2e)', () => {
     expect(wrongRes.body.message).toContain('4 attempts left');
     const done = await http(app).post(`/orders/${orderId}/deliver`).set(auth(runner)).send({ pin }).expect(200);
     expect(done.body.status).toBe('COMPLETED');
-    expect(done.body.events.map((e: { status: string }) => e.status)).toEqual(['PENDING', 'ACCEPTED', 'AT_STORE', 'PICKED_UP', 'DELIVERED', 'COMPLETED']);
+    expect(done.body.events.map((e: { status: string }) => e.status)).toEqual([
+      'PENDING',
+      'ACCEPTED',
+      'AT_STORE',
+      'PICKED_UP',
+      'DELIVERED',
+      'COMPLETED',
+    ]);
     // Phone numbers stop being shared once the errand is over.
     const after = await http(app).get(`/orders/${orderId}`).set(auth(customer)).expect(200);
     expect(after.body.runner.phone).toBeUndefined();
@@ -181,7 +205,11 @@ describe('Errands (e2e)', () => {
   it('only matches runners with the right delivery type and services', async () => {
     const customer = await registerUser(app, 'CUSTOMER');
     const walker = await createApprovedRunner(app, NAIROBI_CBD, { deliveryTypes: ['WALKING'] });
-    const order = await http(app).post('/orders').set(auth(customer)).send(errand({ deliveryType: 'CAR' })).expect(201);
+    const order = await http(app)
+      .post('/orders')
+      .set(auth(customer))
+      .send(errand({ deliveryType: 'CAR' }))
+      .expect(201);
     const jobs = await http(app).get('/runners/me/jobs').set(auth(walker)).expect(200);
     expect(jobs.body.some((j: { id: string }) => j.id === order.body.id)).toBe(false);
     await http(app).post(`/orders/${order.body.id}/accept`).set(auth(walker)).expect(403);
@@ -205,7 +233,11 @@ describe('Errands (e2e)', () => {
   it('lets customers cancel before pickup', async () => {
     const customer = await registerUser(app, 'CUSTOMER');
     const order = await http(app).post('/orders').set(auth(customer)).send(errand()).expect(201);
-    const cancelled = await http(app).post(`/orders/${order.body.id}/cancel`).set(auth(customer)).send({ reason: 'No longer needed' }).expect(200);
+    const cancelled = await http(app)
+      .post(`/orders/${order.body.id}/cancel`)
+      .set(auth(customer))
+      .send({ reason: 'No longer needed' })
+      .expect(200);
     expect(cancelled.body).toMatchObject({ status: 'CANCELLED', cancelReason: 'No longer needed' });
     const active = await http(app).get('/orders?scope=active').set(auth(customer)).expect(200);
     expect(active.body.some((o: { id: string }) => o.id === order.body.id)).toBe(false);
@@ -213,7 +245,11 @@ describe('Errands (e2e)', () => {
 
   it('limits order value by verification level', async () => {
     const customer = await registerUser(app, 'CUSTOMER');
-    const res = await http(app).post('/orders').set(auth(customer)).send(errand({ itemsCost: 6000 })).expect(403);
+    const res = await http(app)
+      .post('/orders')
+      .set(auth(customer))
+      .send(errand({ itemsCost: 6000 }))
+      .expect(403);
     expect(res.body.message).toContain('KES 5,000');
   });
 

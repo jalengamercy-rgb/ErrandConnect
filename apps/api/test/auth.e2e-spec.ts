@@ -64,8 +64,14 @@ describe('Auth & customer accounts (e2e)', () => {
     // The old refresh token no longer works.
     await http(app).post('/auth/refresh').send({ refreshToken }).expect(401);
 
-    await http(app).post('/auth/logout').set({ Authorization: `Bearer ${accessToken}` }).expect(200);
-    await http(app).get('/me').set({ Authorization: `Bearer ${accessToken}` }).expect(401);
+    await http(app)
+      .post('/auth/logout')
+      .set({ Authorization: `Bearer ${accessToken}` })
+      .expect(200);
+    await http(app)
+      .get('/me')
+      .set({ Authorization: `Bearer ${accessToken}` })
+      .expect(401);
     await http(app).post('/auth/refresh').send({ refreshToken: refreshed.body.refreshToken }).expect(401);
   });
 

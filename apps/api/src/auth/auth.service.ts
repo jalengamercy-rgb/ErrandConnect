@@ -53,8 +53,9 @@ export class AuthService {
       : null;
 
     const [passwordHash, pinHash] = await Promise.all([hashSecret(dto.password), hashSecret(dto.pin)]);
-    const referralCode = await uniqueCode(newReferralCode, async (code) =>
-      !!(await this.prisma.user.findUnique({ where: { referralCode: code }, select: { id: true } })),
+    const referralCode = await uniqueCode(
+      newReferralCode,
+      async (code) => !!(await this.prisma.user.findUnique({ where: { referralCode: code }, select: { id: true } })),
     );
 
     const consents: { type: ConsentType; version: string; granted: boolean }[] = [
@@ -62,7 +63,8 @@ export class AuthService {
       { type: 'PRIVACY_POLICY', version: LEGAL_VERSIONS.PRIVACY_POLICY, granted: true },
     ];
     if (dto.allowGps !== undefined) consents.push({ type: 'GPS_TRACKING', version: LEGAL_VERSIONS.PRIVACY_POLICY, granted: dto.allowGps });
-    if (dto.allowMarketing !== undefined) consents.push({ type: 'MARKETING', version: LEGAL_VERSIONS.PRIVACY_POLICY, granted: dto.allowMarketing });
+    if (dto.allowMarketing !== undefined)
+      consents.push({ type: 'MARKETING', version: LEGAL_VERSIONS.PRIVACY_POLICY, granted: dto.allowMarketing });
 
     let userId: string;
     try {
@@ -116,9 +118,10 @@ export class AuthService {
       const failed = user.failedLoginCount + 1;
       await this.prisma.user.update({
         where: { id: user.id },
-        data: failed >= MAX_FAILED_LOGINS
-          ? { failedLoginCount: 0, lockedUntil: new Date(Date.now() + LOCKOUT_MS) }
-          : { failedLoginCount: failed },
+        data:
+          failed >= MAX_FAILED_LOGINS
+            ? { failedLoginCount: 0, lockedUntil: new Date(Date.now() + LOCKOUT_MS) }
+            : { failedLoginCount: failed },
       });
       throw invalid;
     }

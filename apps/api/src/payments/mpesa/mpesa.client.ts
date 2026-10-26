@@ -70,7 +70,7 @@ export class MpesaError extends Error {}
 export function parseStkCallback(body: unknown): StkCallbackResult | null {
   const cb = (body as { Body?: { stkCallback?: Record<string, unknown> } })?.Body?.stkCallback;
   if (!cb || typeof cb.CheckoutRequestID !== 'string') return null;
-  const items = ((cb.CallbackMetadata as { Item?: { Name: string; Value?: unknown }[] } | undefined)?.Item ?? []);
+  const items = (cb.CallbackMetadata as { Item?: { Name: string; Value?: unknown }[] } | undefined)?.Item ?? [];
   const item = (name: string) => items.find((i) => i.Name === name)?.Value;
   return {
     checkoutRequestId: cb.CheckoutRequestID,

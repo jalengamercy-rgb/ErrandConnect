@@ -3,7 +3,7 @@ import * as Location from 'expo-location';
 import { useEffect } from 'react';
 
 import { api } from './api';
-import type { ChatMessage, Job, Order, OrderSummary } from './types';
+import type { ChatMessage, Job, Order, OrderSummary, Wallet, WalletTransaction, Withdrawal } from './types';
 
 export const orderKeys = {
   lists: ['orders'] as const,
@@ -11,6 +11,9 @@ export const orderKeys = {
   detail: (id: string) => ['order', id] as const,
   messages: (id: string) => ['order', id, 'messages'] as const,
   jobs: ['runner', 'jobs'] as const,
+  wallets: ['wallets'] as const,
+  walletTransactions: (type: 'customer' | 'runner') => ['wallets', type, 'transactions'] as const,
+  withdrawals: ['wallets', 'withdrawals'] as const,
 };
 
 // Live updates arrive over the socket; these intervals are a safety net.
@@ -33,7 +36,19 @@ export const useJobs = (enabled: boolean) =>
   useQuery({ queryKey: orderKeys.jobs, queryFn: () => api.get<Job[]>('/runners/me/jobs'), enabled, refetchInterval: POLL_MS });
 
 export const useMessages = (orderId: string) =>
-  useQuery({ queryKey: orderKeys.messages(orderId), queryFn: () => api.get<ChatMessage[]>(`/orders/${orderId}/messages`), refetchInterval: POLL_MS });
+  useQuery({
+    queryKey: orderKeys.messages(orderId),
+    queryFn: () => api.get<ChatMessage[]>(`/orders/${orderId}/messages`),
+    refetchInterval: POLL_MS,
+  });
+
+export const useWallets = () => useQuery({ queryKey: orderKeys.wallets, queryFn: () => api.get<Wallet[]>('/wallets') });
+
+export const useWalletTransactions = (type: 'customer' | 'runner') =>
+  useQuery({ queryKey: orderKeys.walletTransactions(type), queryFn: () => api.get<WalletTransaction[]>(`/wallets/${type}/transactions`) });
+
+export const useWithdrawals = () =>
+  useQuery({ queryKey: orderKeys.withdrawals, queryFn: () => api.get<Withdrawal[]>('/wallets/withdrawals') });
 
 export function formatKes(amount: number) {
   return `KES ${amount.toLocaleString('en-KE')}`;

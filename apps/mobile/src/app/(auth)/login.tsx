@@ -25,7 +25,8 @@ export default function LoginScreen() {
   return (
     <Screen
       title="Welcome back"
-      footer={<Button title="Log in" disabled={!phone || !password} loading={login.isPending} onPress={() => login.mutate()} />}>
+      footer={<Button title="Log in" disabled={!phone || !password} loading={login.isPending} onPress={() => login.mutate()} />}
+    >
       <TextField
         label="Mobile number"
         placeholder="0712 345 678"

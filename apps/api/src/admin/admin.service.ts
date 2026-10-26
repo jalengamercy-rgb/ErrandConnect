@@ -9,7 +9,14 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { computeOnboardingProgress, needsVehicle } from '../runners/onboarding-progress.js';
 import { RunnersService } from '../runners/runners.service.js';
 import { UsersService } from '../users/users.service.js';
-import type { AdminOrderListQueryDto, AuditLogQueryDto, PageQueryDto, ReviewDocumentDto, RunnerCheck, RunnerListQueryDto } from './admin.dto.js';
+import type {
+  AdminOrderListQueryDto,
+  AuditLogQueryDto,
+  PageQueryDto,
+  ReviewDocumentDto,
+  RunnerCheck,
+  RunnerListQueryDto,
+} from './admin.dto.js';
 
 /** User fields safe to show in the admin panel (no password/PIN hashes). */
 const USER_SUMMARY = {
@@ -153,7 +160,10 @@ export class AdminService {
     if (missing.length) throw new BadRequestException(`Complete these checks first: ${missing.join(', ')}`);
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.runnerProfile.update({ where: { userId }, data: { applicationStatus: 'APPROVED', approvedAt: new Date(), rejectionReason: null } });
+      await tx.runnerProfile.update({
+        where: { userId },
+        data: { applicationStatus: 'APPROVED', approvedAt: new Date(), rejectionReason: null },
+      });
       await tx.wallet.upsert({ where: { type_userId: { type: 'RUNNER', userId } }, update: {}, create: { type: 'RUNNER', userId } });
       await this.audit.log({ actorId: admin.id, action: 'runner.approve', entityType: 'runner', entityId: userId }, tx);
     });
@@ -167,7 +177,10 @@ export class AdminService {
     }
     await this.prisma.$transaction(async (tx) => {
       await tx.runnerProfile.update({ where: { userId }, data: { applicationStatus: 'REJECTED', rejectionReason: reason } });
-      await this.audit.log({ actorId: admin.id, action: 'runner.reject', entityType: 'runner', entityId: userId, metadata: { reason } }, tx);
+      await this.audit.log(
+        { actorId: admin.id, action: 'runner.reject', entityType: 'runner', entityId: userId, metadata: { reason } },
+        tx,
+      );
     });
     return this.getRunner(userId);
   }
@@ -240,7 +253,9 @@ export class AdminService {
   async verifyCustomerId(userId: string, admin: AuthUser) {
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { customerProfile: { select: { userId: true } } } });
     if (!user?.customerProfile) throw new NotFoundException('Customer not found');
-    const approved = await this.prisma.document.count({ where: { ownerId: userId, type: { in: CUSTOMER_ID_DOCUMENTS }, status: 'APPROVED' } });
+    const approved = await this.prisma.document.count({
+      where: { ownerId: userId, type: { in: CUSTOMER_ID_DOCUMENTS }, status: 'APPROVED' },
+    });
     if (approved === 0) throw new BadRequestException('Approve an ID, passport or driving licence document first');
 
     await this.prisma.$transaction(async (tx) => {
@@ -267,7 +282,13 @@ export class AdminService {
         await tx.runnerProfile.updateMany({ where: { userId }, data: { isOnline: false } });
       }
       await this.audit.log(
-        { actorId: admin.id, action: status === 'SUSPENDED' ? 'user.suspend' : 'user.activate', entityType: 'user', entityId: userId, metadata: { reason: reason ?? null } },
+        {
+          actorId: admin.id,
+          action: status === 'SUSPENDED' ? 'user.suspend' : 'user.activate',
+          entityType: 'user',
+          entityId: userId,
+          metadata: { reason: reason ?? null },
+        },
         tx,
       );
     });
@@ -318,7 +339,13 @@ export class AdminService {
   async cancelOrder(orderId: string, reason: string, admin: AuthUser) {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order) throw new NotFoundException('Order not found');
-    const result = await this.orders.cancel(order, admin.id, `Cancelled by support: ${reason}`, ACTIVE_ORDER_STATUSES, 'Only active orders can be cancelled');
+    const result = await this.orders.cancel(
+      order,
+      admin.id,
+      `Cancelled by support: ${reason}`,
+      ACTIVE_ORDER_STATUSES,
+      'Only active orders can be cancelled',
+    );
     await this.audit.log({ actorId: admin.id, action: 'order.cancel', entityType: 'order', entityId: orderId, metadata: { reason } });
     return result;
   }

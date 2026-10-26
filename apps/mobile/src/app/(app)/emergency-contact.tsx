@@ -50,9 +50,15 @@ function EmergencyContactForm({ initial }: { initial: EmergencyContact | null })
           loading={save.isPending}
           onPress={() => save.mutate()}
         />
-      }>
+      }
+    >
       <TextField label="Full name" value={form.fullName} onChangeText={set('fullName')} />
-      <TextField label="Relationship" placeholder="e.g. Sister, Spouse, Friend" value={form.relationship} onChangeText={set('relationship')} />
+      <TextField
+        label="Relationship"
+        placeholder="e.g. Sister, Spouse, Friend"
+        value={form.relationship}
+        onChangeText={set('relationship')}
+      />
       <TextField
         label="Phone number"
         keyboardType="phone-pad"

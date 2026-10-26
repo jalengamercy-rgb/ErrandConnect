@@ -1,6 +1,16 @@
 import { INestApplication } from '@nestjs/common';
 import { PrismaService } from '../src/prisma/prisma.service.js';
-import { auth, createApprovedRunner, createStaff, createTestApp, http, NAIROBI_CBD, registerUser, WESTLANDS, type TestUser } from './helpers.js';
+import {
+  auth,
+  createApprovedRunner,
+  createStaff,
+  createTestApp,
+  http,
+  NAIROBI_CBD,
+  registerUser,
+  WESTLANDS,
+  type TestUser,
+} from './helpers.js';
 
 const SECRET = 'test-callback-secret';
 
@@ -24,7 +34,14 @@ function stkCallback(checkoutRequestId: string, amount: number, resultCode = 0) 
         ResultCode: resultCode,
         ResultDesc: resultCode === 0 ? 'The service request is processed successfully.' : 'Request cancelled by user',
         ...(resultCode === 0
-          ? { CallbackMetadata: { Item: [{ Name: 'Amount', Value: amount }, { Name: 'MpesaReceiptNumber', Value: `TST${checkoutRequestId.slice(-6)}` }] } }
+          ? {
+              CallbackMetadata: {
+                Item: [
+                  { Name: 'Amount', Value: amount },
+                  { Name: 'MpesaReceiptNumber', Value: `TST${checkoutRequestId.slice(-6)}` },
+                ],
+              },
+            }
           : {}),
       },
     },
@@ -32,7 +49,16 @@ function stkCallback(checkoutRequestId: string, amount: number, resultCode = 0) 
 }
 
 function b2cResult(conversationId: string, resultCode = 0) {
-  return { Result: { ResultType: 0, ResultCode: resultCode, ResultDesc: resultCode ? 'Insufficient funds' : 'OK', ConversationID: conversationId, OriginatorConversationID: 'x', TransactionID: 'TSTB2C123' } };
+  return {
+    Result: {
+      ResultType: 0,
+      ResultCode: resultCode,
+      ResultDesc: resultCode ? 'Insufficient funds' : 'OK',
+      ConversationID: conversationId,
+      OriginatorConversationID: 'x',
+      TransactionID: 'TSTB2C123',
+    },
+  };
 }
 
 describe('Payments, escrow and wallets (e2e)', () => {
@@ -46,7 +72,10 @@ describe('Payments, escrow and wallets (e2e)', () => {
   const checkoutId = async (orderId: string) =>
     (await prisma.payment.findFirstOrThrow({ where: { orderId }, orderBy: { createdAt: 'desc' } })).providerRequestId!;
   const pay = (checkout: string, amount: number, resultCode = 0) =>
-    http(app).post(`/payments/mpesa/stk-callback/${SECRET}`).send(stkCallback(checkout, amount, resultCode)).expect(200);
+    http(app)
+      .post(`/payments/mpesa/stk-callback/${SECRET}`)
+      .send(stkCallback(checkout, amount, resultCode))
+      .expect(200);
 
   /** Customer posts an M-Pesa errand and pays it. */
   async function paidErrand(customer: TestUser) {
@@ -58,7 +87,9 @@ describe('Payments, escrow and wallets (e2e)', () => {
   /** Runner with an approved M-Pesa payout account. */
   async function payoutReadyRunner() {
     const runner = await createApprovedRunner(app);
-    await prisma.payoutMethod.create({ data: { userId: runner.id, type: 'MPESA', accountName: 'Test Runner', phone: runner.phone, isDefault: true, status: 'APPROVED' } });
+    await prisma.payoutMethod.create({
+      data: { userId: runner.id, type: 'MPESA', accountName: 'Test Runner', phone: runner.phone, isDefault: true, status: 'APPROVED' },
+    });
     return runner;
   }
 
@@ -100,7 +131,11 @@ describe('Payments, escrow and wallets (e2e)', () => {
     await pay(checkout, created.body.total);
     await pay(checkout, created.body.total); // Safaricom may repeat callbacks
     const paid = await http(app).get(`/orders/${created.body.id}`).set(auth(customer)).expect(200);
-    expect(paid.body).toMatchObject({ status: 'PENDING', escrowStatus: 'HELD', payment: { status: 'SUCCEEDED', providerReceipt: `TST${checkout.slice(-6)}` } });
+    expect(paid.body).toMatchObject({
+      status: 'PENDING',
+      escrowStatus: 'HELD',
+      payment: { status: 'SUCCEEDED', providerReceipt: `TST${checkout.slice(-6)}` },
+    });
     expect(await systemBalance('ESCROW')).toBe(escrowBefore + created.body.total);
 
     jobs = await http(app).get('/runners/me/jobs').set(auth(runner)).expect(200);
@@ -124,7 +159,10 @@ describe('Payments, escrow and wallets (e2e)', () => {
     await pay(await checkoutId(order.body.id), order.body.total, 1032);
 
     const after = await http(app).get(`/orders/${order.body.id}`).set(auth(customer)).expect(200);
-    expect(after.body).toMatchObject({ status: 'AWAITING_PAYMENT', payment: { status: 'CANCELLED', failureReason: 'Request cancelled by user' } });
+    expect(after.body).toMatchObject({
+      status: 'AWAITING_PAYMENT',
+      payment: { status: 'CANCELLED', failureReason: 'Request cancelled by user' },
+    });
 
     await http(app).post(`/orders/${order.body.id}/pay`).set(auth(customer)).send({}).expect(200);
     // A second prompt straight away is refused.
@@ -147,7 +185,11 @@ describe('Payments, escrow and wallets (e2e)', () => {
 
     // Not enough left for a bigger errand: nothing is created.
     const before = await prisma.order.count({ where: { customerId: customer.id } });
-    await http(app).post('/orders').set(auth(customer)).send(errand('WALLET', { itemsCost: 3000 })).expect(400);
+    await http(app)
+      .post('/orders')
+      .set(auth(customer))
+      .send(errand('WALLET', { itemsCost: 3000 }))
+      .expect(400);
     expect(await prisma.order.count({ where: { customerId: customer.id } })).toBe(before);
   });
 
@@ -194,14 +236,21 @@ describe('Payments, escrow and wallets (e2e)', () => {
 
     await http(app).post('/wallets/runner/withdrawals').set(auth(runner)).send({ amount: 200, pin: '0000' }).expect(401);
     await http(app).post('/wallets/runner/withdrawals').set(auth(runner)).send({ amount: 50, pin: '4821' }).expect(400);
-    await http(app).post('/wallets/runner/withdrawals').set(auth(runner)).send({ amount: earned + 1, pin: '4821' }).expect(400);
+    await http(app)
+      .post('/wallets/runner/withdrawals')
+      .set(auth(runner))
+      .send({ amount: earned + 1, pin: '4821' })
+      .expect(400);
 
     const withdrawal = await http(app).post('/wallets/runner/withdrawals').set(auth(runner)).send({ amount: 200, pin: '4821' }).expect(201);
     expect(withdrawal.body).toMatchObject({ status: 'APPROVED', amount: 200, destination: { phone: runner.phone } });
     expect(await balance(runner.id, 'RUNNER')).toBe(earned - 200);
 
     const wallets = await http(app).get('/wallets').set(auth(runner)).expect(200);
-    expect(wallets.body.find((w: { type: string }) => w.type === 'RUNNER')).toMatchObject({ balance: earned - 200, pendingWithdrawals: 200 });
+    expect(wallets.body.find((w: { type: string }) => w.type === 'RUNNER')).toMatchObject({
+      balance: earned - 200,
+      pendingWithdrawals: 200,
+    });
 
     const conversationId = (await prisma.withdrawal.findUniqueOrThrow({ where: { id: withdrawal.body.id } })).providerReference!;
     await http(app).post(`/payments/mpesa/b2c-result/${SECRET}`).send(b2cResult(conversationId)).expect(200);
@@ -221,7 +270,11 @@ describe('Payments, escrow and wallets (e2e)', () => {
     const runner = await payoutReadyRunner();
     // Give the runner a big balance from a large paid errand (ID-verified customer, so no order limit).
     await prisma.customerProfile.update({ where: { userId: customer.id }, data: { verificationLevel: 3 } });
-    const big = await http(app).post('/orders').set(auth(customer)).send(errand('MPESA', { itemsCost: 12000 })).expect(201);
+    const big = await http(app)
+      .post('/orders')
+      .set(auth(customer))
+      .send(errand('MPESA', { itemsCost: 12000 }))
+      .expect(201);
     await pay(await checkoutId(big.body.id), big.body.total);
     await http(app).post(`/orders/${big.body.id}/accept`).set(auth(runner)).expect(200);
     await http(app).post(`/orders/${big.body.id}/deliver`).set(auth(runner)).send({ pin: big.body.deliveryPin }).expect(200);
@@ -237,18 +290,31 @@ describe('Payments, escrow and wallets (e2e)', () => {
 
     const another = await http(app).post('/wallets/runner/withdrawals').set(auth(runner)).send({ amount: 5500, pin: '4821' }).expect(201);
     const before = await balance(runner.id, 'RUNNER');
-    await http(app).post(`/admin/withdrawals/${another.body.id}/reject`).set(auth(finance)).send({ reason: 'Name mismatch on M-Pesa' }).expect(200);
+    await http(app)
+      .post(`/admin/withdrawals/${another.body.id}/reject`)
+      .set(auth(finance))
+      .send({ reason: 'Name mismatch on M-Pesa' })
+      .expect(200);
     expect(await balance(runner.id, 'RUNNER')).toBe(before + 5500);
 
     const summary = await http(app).get('/admin/finance/summary').set(auth(finance)).expect(200);
     expect(summary.body).toEqual(
-      expect.objectContaining({ platformRevenue: expect.any(Number), escrowHeld: expect.any(Number), payoutsPending: expect.any(Number), mpesaFloat: expect.any(Number) }),
+      expect.objectContaining({
+        platformRevenue: expect.any(Number),
+        escrowHeld: expect.any(Number),
+        payoutsPending: expect.any(Number),
+        mpesaFloat: expect.any(Number),
+      }),
     );
   });
 
   it('only lets runners withdraw to an approved payout account', async () => {
     const runner = await createApprovedRunner(app);
-    await prisma.wallet.upsert({ where: { type_userId: { type: 'RUNNER', userId: runner.id } }, update: {}, create: { type: 'RUNNER', userId: runner.id } });
+    await prisma.wallet.upsert({
+      where: { type_userId: { type: 'RUNNER', userId: runner.id } },
+      update: {},
+      create: { type: 'RUNNER', userId: runner.id },
+    });
     await http(app).post('/wallets/runner/withdrawals').set(auth(runner)).send({ amount: 100, pin: '4821' }).expect(403);
   });
 });

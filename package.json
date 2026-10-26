@@ -13,7 +13,9 @@
     "dev:api": "npm run start:dev -w @errandconnect/api",
     "dev:mobile": "npm run start -w @errandconnect/mobile",
     "db:migrate": "npm run db:migrate -w @errandconnect/api",
-    "db:seed": "npm run db:seed -w @errandconnect/api"
+    "db:seed": "npm run db:seed -w @errandconnect/api",
+    "format": "prettier --write \"apps/*/src/**/*.{ts,tsx}\" \"apps/api/test/**/*.ts\" \"packages/*/src/**/*.ts\"",
+    "format:check": "prettier --check \"apps/*/src/**/*.{ts,tsx}\" \"apps/api/test/**/*.ts\" \"packages/*/src/**/*.ts\""
   },
   "engines": {
     "node": ">=22",

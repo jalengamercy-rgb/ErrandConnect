@@ -61,7 +61,9 @@ Base URL (local): `http://localhost:3000`. Send `Authorization: Bearer <accessTo
 | Method | Path | Who | Notes |
 |---|---|---|---|
 | POST | `/orders/quote` | Customer | `{ categorySlug, dropoffAddressId \| dropoff{address,lat,lng}, pickup?, deliveryType, urgency?, itemsCost? }` → price breakdown + `distanceKm` |
-| POST | `/orders` | Customer | Same + `description`, `recipientName?`, `recipientPhone?`, `scheduledFor?`, `paymentMethod: CASH`. Limited by verification level (L1 ≤ 5,000, L2 ≤ 20,000). |
+| POST | `/orders` | Customer | Same + `description`, `recipientName?`, `recipientPhone?`, `scheduledFor?`, `paymentMethod: MPESA \| WALLET \| CASH`, `mpesaPhone?`. Limited by verification level (L1 ≤ 5,000, L2 ≤ 20,000). M-Pesa orders start as `AWAITING_PAYMENT`. |
+| POST | `/orders/:id/pay` `{ phone? }` | Customer | Send the M-Pesa prompt again |
+| POST | `/orders/:id/payment/refresh` | Customer | Ask M-Pesa about a payment whose callback hasn't arrived |
 | GET | `/orders?scope=active\|past` | Customer | Own errands |
 | GET | `/orders/:id` | Customer, assigned runner, staff | `deliveryPin` only for the customer; phones only while in progress |
 | POST | `/orders/:id/cancel` `{ reason }` | Customer | Until the runner has picked up |
@@ -75,9 +77,22 @@ Base URL (local): `http://localhost:3000`. Send `Authorization: Bearer <accessTo
 | GET / POST | `/orders/:id/messages` | Customer, runner | Chat (open until 24 h after the errand ends) |
 | POST | `/orders/:id/review` `{ stars, comment? }` | Customer, runner | Once each, after completion |
 
+## Wallets
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/wallets` | Customer/runner wallets with `balance` and `pendingWithdrawals` |
+| GET | `/wallets/:type/transactions` | `type` = `customer` or `runner` |
+| POST | `/wallets/:type/withdrawals` `{ amount, pin }` | Withdraw to M-Pesa (see docs/PAYMENTS.md) |
+| GET | `/wallets/withdrawals` | Own withdrawals |
+
+## M-Pesa callbacks (called by Safaricom)
+
+`POST /payments/mpesa/stk-callback/:secret`, `/b2c-result/:secret`, `/b2c-timeout/:secret`.
+
 ### Live updates (Socket.IO)
 
-Connect with `io(API_URL, { auth: { token: accessToken } })`. Events: `job.new`, `job.taken`, `order.updated`, `order.message`, `runner.location`. Emit `order.subscribe { orderId }` to join an order's room.
+Connect with `io(API_URL, { auth: { token: accessToken } })`. Events: `job.new`, `job.taken`, `order.updated`, `order.message`, `runner.location`, `wallet.updated`. Emit `order.subscribe { orderId }` to join an order's room.
 
 ## Admin (staff accounts)
 
@@ -96,6 +111,11 @@ Connect with `io(API_URL, { auth: { token: accessToken } })`. Events: `job.new`,
 | GET | `/admin/orders/:id` | Operations, Support |
 | POST | `/admin/orders/:id/assign` `{ runnerId }` | Operations |
 | POST | `/admin/orders/:id/cancel` `{ reason }` | Operations, Support |
+| GET | `/admin/finance/summary` | Finance |
+| GET | `/admin/escrows?status=` | Finance, Operations |
+| GET | `/admin/payments?status=&search=` | Finance |
+| GET | `/admin/withdrawals?status=` | Finance |
+| POST | `/admin/withdrawals/:id/approve`, `/reject` `{ reason }`, `/mark-paid` `{ reference }` | Finance |
 | GET | `/admin/audit-logs?entityType=&entityId=` | Super admin only |
 
 The first super admin is created by `npm run db:seed` when `SEED_ADMIN_PHONE` and `SEED_ADMIN_PASSWORD` are set.

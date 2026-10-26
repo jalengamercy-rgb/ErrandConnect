@@ -81,7 +81,13 @@ export function StarRating({ value, onChange }: { value: number; onChange?: (sta
   return (
     <View style={styles.stars} accessibilityRole="adjustable" accessibilityValue={{ min: 0, max: 5, now: value }}>
       {[1, 2, 3, 4, 5].map((star) => (
-        <Pressable key={star} disabled={!onChange} accessibilityRole="button" accessibilityLabel={`${star} star${star > 1 ? 's' : ''}`} onPress={() => onChange?.(star)}>
+        <Pressable
+          key={star}
+          disabled={!onChange}
+          accessibilityRole="button"
+          accessibilityLabel={`${star} star${star > 1 ? 's' : ''}`}
+          onPress={() => onChange?.(star)}
+        >
           <ThemedText style={[styles.star, { color: star <= value ? theme.warning : theme.border }]}>★</ThemedText>
         </Pressable>
       ))}

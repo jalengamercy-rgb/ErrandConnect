@@ -6,12 +6,14 @@ import { PageQueryDto } from '../admin/admin.dto.js';
 
 export class PayDto {
   /** Defaults to the customer's own number. */
-  @IsOptional() @IsKenyanPhone()
+  @IsOptional()
+  @IsKenyanPhone()
   phone?: string;
 }
 
 export class WithdrawDto {
-  @IsInt() @Min(1)
+  @IsInt()
+  @Min(1)
   amount: number;
 
   @Matches(/^\d{4}$/, { message: 'pin must be 4 digits' })
@@ -24,29 +26,41 @@ export class WalletTypeParam {
 }
 
 export class TransactionsQueryDto {
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1)
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
   page = 1;
 
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100)
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
   pageSize = 30;
 }
 
 export class EscrowListQueryDto extends PageQueryDto {
-  @IsOptional() @IsEnum(EscrowStatus)
+  @IsOptional()
+  @IsEnum(EscrowStatus)
   status?: EscrowStatus;
 }
 
 export class PaymentListQueryDto extends PageQueryDto {
-  @IsOptional() @IsEnum(PaymentStatus)
+  @IsOptional()
+  @IsEnum(PaymentStatus)
   status?: PaymentStatus;
 }
 
 export class WithdrawalListQueryDto extends PageQueryDto {
-  @IsOptional() @IsEnum(WithdrawalStatus)
+  @IsOptional()
+  @IsEnum(WithdrawalStatus)
   status?: WithdrawalStatus;
 }
 
 export class ReferenceDto {
-  @Trim() @IsString() @Length(3, 60)
+  @Trim()
+  @IsString()
+  @Length(3, 60)
   reference: string;
 }

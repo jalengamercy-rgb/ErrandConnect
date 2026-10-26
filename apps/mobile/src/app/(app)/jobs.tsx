@@ -40,7 +40,9 @@ export default function JobsScreen() {
       )}
       {error && <Notice tone="error">{error.message}</Notice>}
       {jobs?.length === 0 && <Notice>No jobs nearby right now. Stay online — new ones appear here automatically.</Notice>}
-      {jobs?.map((job) => <JobCard key={job.id} job={job} disabled={!!busy} />)}
+      {jobs?.map((job) => (
+        <JobCard key={job.id} job={job} disabled={!!busy} />
+      ))}
     </Screen>
   );
 }

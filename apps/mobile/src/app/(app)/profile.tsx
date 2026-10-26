@@ -55,7 +55,12 @@ export default function ProfileScreen() {
         <Button title="Become a runner and earn" variant="secondary" loading={addRole.isPending} onPress={() => addRole.mutate('runner')} />
       )}
       {!me.customerProfile && (
-        <Button title="Also use ErrandCONNECT as a customer" variant="secondary" loading={addRole.isPending} onPress={() => addRole.mutate('customer')} />
+        <Button
+          title="Also use ErrandCONNECT as a customer"
+          variant="secondary"
+          loading={addRole.isPending}
+          onPress={() => addRole.mutate('customer')}
+        />
       )}
       {addRole.error && <Notice tone="error">{addRole.error.message}</Notice>}
       <Button title="Log out" variant="ghost" onPress={signOut} />

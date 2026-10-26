@@ -14,7 +14,8 @@ import { TextField } from '@/components/ui/text-field';
 import { api } from '@/lib/api';
 import { getCurrentLocation } from '@/lib/device';
 import { humanize } from '@/lib/format';
-import { formatKes, orderKeys } from '@/lib/orders';
+import { useAuth } from '@/lib/auth-context';
+import { formatKes, orderKeys, useWallets } from '@/lib/orders';
 import { useAddresses, useCategories } from '@/lib/queries';
 import type { Order, Quote, Urgency } from '@/lib/types';
 
@@ -53,13 +54,19 @@ export default function NewErrandScreen() {
   const [forSomeoneElse, setForSomeoneElse] = useState(false);
   const [recipientName, setRecipientName] = useState('');
   const [recipientPhone, setRecipientPhone] = useState('');
+  const { me } = useAuth();
+  const { data: wallets } = useWallets();
+  const walletBalance = wallets?.find((w) => w.type === 'CUSTOMER')?.balance ?? 0;
+  const [paymentMethod, setPaymentMethod] = useState<'MPESA' | 'WALLET' | 'CASH'>('MPESA');
+  const [mpesaPhone, setMpesaPhone] = useState(me?.phone ? `0${me.phone.slice(4)}` : '');
 
   // Use the default saved address until the customer picks another.
   const dropoffId = chosenDropoffId ?? addresses?.find((a) => a.isDefault)?.id ?? addresses?.[0]?.id ?? null;
 
   const locatePickup = useMutation({ mutationFn: getCurrentLocation, onSuccess: setPickupPoint });
 
-  const pickup = hasPickup && pickupPoint && pickupAddress.trim().length >= 2 ? { address: pickupAddress.trim(), ...pickupPoint } : undefined;
+  const pickup =
+    hasPickup && pickupPoint && pickupAddress.trim().length >= 2 ? { address: pickupAddress.trim(), ...pickupPoint } : undefined;
   const details = useDebounced({
     categorySlug: category,
     dropoffAddressId: dropoffId,
@@ -76,6 +83,11 @@ export default function NewErrandScreen() {
   });
 
   const recipientOk = !forSomeoneElse || (recipientName.trim().length >= 2 && !!normalizeKenyanPhone(recipientPhone));
+  const total = quote.data?.quote.customer.total;
+  const paymentOk =
+    paymentMethod === 'CASH' ||
+    (paymentMethod === 'MPESA' && !!normalizeKenyanPhone(mpesaPhone)) ||
+    (paymentMethod === 'WALLET' && total !== undefined && walletBalance >= total);
   const create = useMutation({
     mutationFn: () =>
       api.post<Order>('/orders', {
@@ -83,7 +95,8 @@ export default function NewErrandScreen() {
         description: description.trim(),
         recipientName: forSomeoneElse ? recipientName.trim() : undefined,
         recipientPhone: forSomeoneElse ? recipientPhone : undefined,
-        paymentMethod: 'CASH',
+        paymentMethod,
+        mpesaPhone: paymentMethod === 'MPESA' ? mpesaPhone : undefined,
       }),
     onSuccess: (order) => {
       queryClient.invalidateQueries({ queryKey: orderKeys.lists });
@@ -91,19 +104,26 @@ export default function NewErrandScreen() {
     },
   });
 
-  const ready = canQuote && quote.isSuccess && description.trim().length >= 5 && recipientOk;
+  const ready = canQuote && quote.isSuccess && description.trim().length >= 5 && recipientOk && paymentOk;
+  const payLabel = { MPESA: 'Pay with M-Pesa', WALLET: 'Pay from wallet', CASH: 'Post errand' }[paymentMethod];
 
   return (
     <Screen
       footer={
         <Button
-          title={quote.data ? `Post errand · ${formatKes(quote.data.quote.customer.total)}` : 'Post errand'}
+          title={total !== undefined ? `${payLabel} · ${formatKes(total)}` : payLabel}
           disabled={!ready}
           loading={create.isPending}
           onPress={() => create.mutate()}
         />
-      }>
-      <ChoiceChips label="What kind of errand?" choices={(categories ?? []).map((c) => ({ value: c.slug, label: c.name }))} value={category} onChange={setCategory} />
+      }
+    >
+      <ChoiceChips
+        label="What kind of errand?"
+        choices={(categories ?? []).map((c) => ({ value: c.slug, label: c.name }))}
+        value={category}
+        onChange={setCategory}
+      />
 
       <TextField
         label="What should the runner do?"
@@ -154,12 +174,45 @@ export default function NewErrandScreen() {
         </>
       )}
 
-      <ChoiceChips label="How should it be carried?" choices={DELIVERY_TYPES.map((t) => ({ value: t, label: humanize(t) }))} value={deliveryType} onChange={setDeliveryType} />
+      <ChoiceChips
+        label="How should it be carried?"
+        choices={DELIVERY_TYPES.map((t) => ({ value: t, label: humanize(t) }))}
+        value={deliveryType}
+        onChange={setDeliveryType}
+      />
       <ChoiceChips label="How urgent?" choices={URGENCY_CHOICES} value={urgency} onChange={setUrgency} />
 
       {quote.data && <PriceBreakdown quote={quote.data.quote.customer} distanceKm={quote.data.distanceKm} />}
       {quote.error && <Notice tone="error">{quote.error.message}</Notice>}
-      <Notice>Pay the runner in cash when they deliver. M-Pesa payments are coming soon.</Notice>
+      <ChoiceChips
+        label="How will you pay?"
+        choices={[
+          { value: 'MPESA', label: 'M-Pesa' },
+          { value: 'WALLET', label: `Wallet (${formatKes(walletBalance)})` },
+          { value: 'CASH', label: 'Cash on delivery' },
+        ]}
+        value={paymentMethod}
+        onChange={setPaymentMethod}
+      />
+      {paymentMethod === 'MPESA' && (
+        <>
+          <TextField
+            label="M-Pesa number"
+            keyboardType="phone-pad"
+            value={mpesaPhone}
+            onChangeText={setMpesaPhone}
+            hint="You'll get a prompt on this phone to enter your M-Pesa PIN."
+          />
+          <Notice>
+            Your money is held safely and only paid to the runner when you give them your delivery PIN. Cancel before pickup for a full
+            refund to your wallet.
+          </Notice>
+        </>
+      )}
+      {paymentMethod === 'WALLET' && total !== undefined && walletBalance < total && (
+        <Notice tone="warning">Your wallet balance is too low for this errand.</Notice>
+      )}
+      {paymentMethod === 'CASH' && <Notice>Pay the runner in cash when they deliver.</Notice>}
       {create.error && <Notice tone="error">{create.error.message}</Notice>}
     </Screen>
   );

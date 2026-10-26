@@ -5,7 +5,7 @@
 | 0. Foundation | Monorepo, database schema, pricing engine, API skeleton | Done |
 | 1. Accounts & onboarding | Phone OTP login, customer registration, runner 15-step registration, document uploads, admin approval | Done (API + app) |
 | 2. Core errand flow (MVP) | Create errand, quote, runner matching, order statuses, live tracking, chat, ratings | Done (cash payments; maps open in Google Maps) |
-| 3. Payments & escrow | M-Pesa STK Push, escrow hold/release with delivery PIN, wallets, B2C withdrawals, refunds | |
+| 3. Payments & escrow | M-Pesa STK Push, escrow hold/release with delivery PIN, wallets, B2C withdrawals, refunds | Done (simulated M-Pesa; Daraja ready for credentials) |
 | Pilot | Small launch in a few Nairobi areas | |
 | 4. Admin panel | Dashboard, live map, order/escrow/payment management, disputes, tickets, reports, roles, audit logs | |
 | 5. Merchants & businesses | Merchant onboarding, business accounts, teams, invoicing, bulk/scheduled deliveries | |

@@ -41,7 +41,12 @@ describe('DarajaMpesaClient', () => {
       body: { MerchantRequestID: 'm1', CheckoutRequestID: 'ws_CO_1', ResponseCode: '0', CustomerMessage: 'Success' },
     });
     const client = new DarajaMpesaClient(config, fn);
-    const res = await client.stkPush({ phone: '+254712345678', amount: 866, accountReference: '202610263772X', description: 'ErrandCONNECT order' });
+    const res = await client.stkPush({
+      phone: '+254712345678',
+      amount: 866,
+      accountReference: '202610263772X',
+      description: 'ErrandCONNECT order',
+    });
 
     expect(res).toEqual({ merchantRequestId: 'm1', checkoutRequestId: 'ws_CO_1', customerMessage: 'Success' });
     expect(calls[0].url).toBe('https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials');
@@ -74,7 +79,9 @@ describe('DarajaMpesaClient', () => {
   it('turns Daraja errors into a friendly MpesaError', async () => {
     const { fn } = fakeFetch(TOKEN, { status: 400, body: { errorMessage: 'Bad Request - Invalid PhoneNumber' } });
     const client = new DarajaMpesaClient(config, fn);
-    await expect(client.stkPush({ phone: '+254712345678', amount: 1, accountReference: 'A', description: 'B' })).rejects.toBeInstanceOf(MpesaError);
+    await expect(client.stkPush({ phone: '+254712345678', amount: 1, accountReference: 'A', description: 'B' })).rejects.toBeInstanceOf(
+      MpesaError,
+    );
   });
 
   it('sends B2C payouts with result and timeout URLs', async () => {
@@ -97,7 +104,9 @@ describe('DarajaMpesaClient', () => {
 
   it('refuses B2C until payout credentials are configured', async () => {
     const client = new DarajaMpesaClient({ ...config, securityCredential: undefined }, fakeFetch().fn);
-    await expect(client.b2c({ phone: '+254712345678', amount: 1, originatorConversationId: 'o', remarks: 'r' })).rejects.toThrow('not set up');
+    await expect(client.b2c({ phone: '+254712345678', amount: 1, originatorConversationId: 'o', remarks: 'r' })).rejects.toThrow(
+      'not set up',
+    );
   });
 });
 
@@ -110,7 +119,13 @@ describe('callback parsing', () => {
             CheckoutRequestID: 'ws_CO_1',
             ResultCode: 0,
             ResultDesc: 'ok',
-            CallbackMetadata: { Item: [{ Name: 'Amount', Value: 866 }, { Name: 'MpesaReceiptNumber', Value: 'SJK3ABC123' }, { Name: 'PhoneNumber', Value: 254712345678 }] },
+            CallbackMetadata: {
+              Item: [
+                { Name: 'Amount', Value: 866 },
+                { Name: 'MpesaReceiptNumber', Value: 'SJK3ABC123' },
+                { Name: 'PhoneNumber', Value: 254712345678 },
+              ],
+            },
           },
         },
       }),
@@ -118,8 +133,13 @@ describe('callback parsing', () => {
   });
 
   it('reads a cancelled STK callback without metadata, and rejects junk', () => {
-    expect(parseStkCallback({ Body: { stkCallback: { CheckoutRequestID: 'c', ResultCode: 1032, ResultDesc: 'Cancelled' } } })).toMatchObject({ resultCode: 1032, amount: undefined });
+    expect(
+      parseStkCallback({ Body: { stkCallback: { CheckoutRequestID: 'c', ResultCode: 1032, ResultDesc: 'Cancelled' } } }),
+    ).toMatchObject({ resultCode: 1032, amount: undefined });
     expect(parseStkCallback({ hello: 'world' })).toBeNull();
-    expect(parseB2cCallback({ Result: { ConversationID: 'AG_1', ResultCode: 0, ResultDesc: 'ok', TransactionID: 'T1' } })).toMatchObject({ conversationId: 'AG_1', transactionId: 'T1' });
+    expect(parseB2cCallback({ Result: { ConversationID: 'AG_1', ResultCode: 0, ResultDesc: 'ok', TransactionID: 'T1' } })).toMatchObject({
+      conversationId: 'AG_1',
+      transactionId: 'T1',
+    });
   });
 });
