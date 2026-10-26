@@ -1,17 +1,19 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AdminModule } from './admin/admin.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { CategoriesController } from './categories/categories.controller.js';
 import { AuditModule } from './common/audit.service.js';
 import { AuthGuard } from './common/auth.guard.js';
+import { HttpThrottlerGuard } from './common/http-throttler.guard.js';
 import { DocumentsModule } from './documents/documents.module.js';
 import { HealthController } from './health/health.controller.js';
 import { MessagingModule } from './notifications/messaging.service.js';
-import { PricingController } from './pricing/pricing.controller.js';
-import { PricingService } from './pricing/pricing.service.js';
+import { OrdersModule } from './orders/orders.module.js';
+import { PricingModule } from './pricing/pricing.module.js';
+import { RealtimeServiceModule } from './realtime/realtime.service.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { RunnersModule } from './runners/runners.module.js';
 
@@ -28,16 +30,18 @@ import { RunnersModule } from './runners/runners.module.js';
     }),
     PrismaModule,
     AuditModule,
+    RealtimeServiceModule,
+    PricingModule,
     MessagingModule,
     AuthModule,
     DocumentsModule,
     RunnersModule,
+    OrdersModule,
     AdminModule,
   ],
-  controllers: [HealthController, PricingController, CategoriesController],
+  controllers: [HealthController, CategoriesController],
   providers: [
-    PricingService,
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: HttpThrottlerGuard },
     // Every route requires login unless marked @Public().
     { provide: APP_GUARD, useClass: AuthGuard },
   ],

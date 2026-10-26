@@ -1,5 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ACTIVE_ORDER_STATUSES } from '@errandconnect/shared';
 import { DocumentType, Prisma } from '../generated/prisma/client.js';
+import { OrdersService } from '../orders/orders.service.js';
 import type { AuthUser } from '../common/auth-user.js';
 import { AuditService } from '../common/audit.service.js';
 import { TokensService } from '../auth/tokens.service.js';
@@ -7,7 +9,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { computeOnboardingProgress, needsVehicle } from '../runners/onboarding-progress.js';
 import { RunnersService } from '../runners/runners.service.js';
 import { UsersService } from '../users/users.service.js';
-import type { AuditLogQueryDto, PageQueryDto, ReviewDocumentDto, RunnerCheck, RunnerListQueryDto } from './admin.dto.js';
+import type { AdminOrderListQueryDto, AuditLogQueryDto, PageQueryDto, ReviewDocumentDto, RunnerCheck, RunnerListQueryDto } from './admin.dto.js';
 
 /** User fields safe to show in the admin panel (no password/PIN hashes). */
 const USER_SUMMARY = {
@@ -44,6 +46,7 @@ export class AdminService {
     private readonly runners: RunnersService,
     private readonly users: UsersService,
     private readonly tokens: TokensService,
+    private readonly orders: OrdersService,
   ) {}
 
   // ─── Runners ───
@@ -271,6 +274,53 @@ export class AdminService {
     // Sign the suspended user out of every device.
     if (status === 'SUSPENDED') await this.tokens.revokeAllSessions(userId);
     return this.users.getMe(userId);
+  }
+
+  // ─── Orders ───
+
+  async listOrders(query: AdminOrderListQueryDto) {
+    const contains = query.search ? { contains: query.search, mode: 'insensitive' as const } : undefined;
+    const where: Prisma.OrderWhereInput = {
+      status: query.status,
+      ...(contains ? { OR: [{ orderNumber: contains }, { description: contains }, { customer: { phone: contains } }] } : {}),
+    };
+    const [total, items] = await Promise.all([
+      this.prisma.order.count({ where }),
+      this.prisma.order.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+        select: {
+          id: true,
+          orderNumber: true,
+          status: true,
+          total: true,
+          platformFee: true,
+          distanceKm: true,
+          paymentMethod: true,
+          createdAt: true,
+          category: { select: { name: true } },
+          customer: { select: { id: true, firstName: true, lastName: true, phone: true } },
+          runner: { select: { id: true, firstName: true, lastName: true, phone: true } },
+        },
+      }),
+    ]);
+    return { total, page: query.page, pageSize: query.pageSize, items };
+  }
+
+  async assignOrder(orderId: string, runnerId: string, admin: AuthUser) {
+    const order = await this.orders.assign(orderId, runnerId, admin.id);
+    await this.audit.log({ actorId: admin.id, action: 'order.assign', entityType: 'order', entityId: orderId, metadata: { runnerId } });
+    return order;
+  }
+
+  async cancelOrder(orderId: string, reason: string, admin: AuthUser) {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundException('Order not found');
+    const result = await this.orders.cancel(order, admin.id, `Cancelled by support: ${reason}`, ACTIVE_ORDER_STATUSES, 'Only active orders can be cancelled');
+    await this.audit.log({ actorId: admin.id, action: 'order.cancel', entityType: 'order', entityId: orderId, metadata: { reason } });
+    return result;
   }
 
   // ─── Activity logs ───

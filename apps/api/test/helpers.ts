@@ -8,11 +8,18 @@ import { MessagingService } from '../src/notifications/messaging.service.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { setupApp } from '../src/setup-app.js';
 
-export async function createTestApp() {
+/** Starts the API. With `listen`, it also accepts real network connections (needed for WebSocket tests). */
+export async function createTestApp({ listen = false } = {}) {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
   const app = setupApp(moduleRef.createNestApplication());
-  await app.init();
+  if (listen) await app.listen(0);
+  else await app.init();
   return app;
+}
+
+/** Base URL of an app started with `listen: true`. */
+export function appUrl(app: INestApplication) {
+  return `http://localhost:${app.getHttpServer().address().port}`;
 }
 
 export const http = (app: INestApplication) => request(app.getHttpServer());
@@ -82,3 +89,29 @@ export const TINY_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
   'base64',
 );
+
+export const NAIROBI_CBD = { lat: -1.2864, lng: 36.8172 };
+export const WESTLANDS = { lat: -1.2676, lng: 36.8108 };
+export const MOMBASA = { lat: -4.0435, lng: 39.6682 };
+
+/** A runner who is approved, online at `location`, and offers every service by motorcycle. */
+export async function createApprovedRunner(app: INestApplication, location = NAIROBI_CBD, overrides: Record<string, unknown> = {}) {
+  const runner = await registerUser(app, 'RUNNER');
+  const prisma = app.get(PrismaService);
+  const categories = await prisma.serviceCategory.findMany({ select: { slug: true } });
+  await prisma.runnerProfile.update({
+    where: { userId: runner.id },
+    data: {
+      applicationStatus: 'APPROVED',
+      approvedAt: new Date(),
+      isOnline: true,
+      lastLat: location.lat,
+      lastLng: location.lng,
+      deliveryTypes: ['MOTORCYCLE', 'WALKING'],
+      servicesOffered: categories.map((c) => c.slug),
+      maxDistanceKm: 10,
+      ...overrides,
+    },
+  });
+  return runner;
+}

@@ -1,12 +1,25 @@
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { CurrentUser, Staff, type AuthUser } from '../common/auth-user.js';
-import { AuditLogQueryDto, PageQueryDto, ReasonDto, ReviewDocumentDto, RunnerCheckDto, RunnerListQueryDto } from './admin.dto.js';
+import {
+  AdminOrderListQueryDto,
+  AssignRunnerDto,
+  AuditLogQueryDto,
+  PageQueryDto,
+  ReasonDto,
+  ReviewDocumentDto,
+  RunnerCheckDto,
+  RunnerListQueryDto,
+} from './admin.dto.js';
+import { OrdersService } from '../orders/orders.service.js';
 import { AdminService } from './admin.service.js';
 
 // SUPER_ADMIN can use every route; the roles listed are the others allowed.
 @Controller('admin')
 export class AdminController {
-  constructor(private readonly admin: AdminService) {}
+  constructor(
+    private readonly admin: AdminService,
+    private readonly orders: OrdersService,
+  ) {}
 
   @Get('runners')
   @Staff('OPERATIONS_MANAGER', 'RUNNER_MANAGER')
@@ -80,6 +93,32 @@ export class AdminController {
   @Staff('OPERATIONS_MANAGER')
   activate(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() admin: AuthUser) {
     return this.admin.setUserStatus(id, 'ACTIVE', undefined, admin);
+  }
+
+  @Get('orders')
+  @Staff('OPERATIONS_MANAGER', 'CUSTOMER_SUPPORT')
+  listOrders(@Query() query: AdminOrderListQueryDto) {
+    return this.admin.listOrders(query);
+  }
+
+  @Get('orders/:id')
+  @Staff('OPERATIONS_MANAGER', 'CUSTOMER_SUPPORT')
+  getOrder(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() admin: AuthUser) {
+    return this.orders.getForViewer(id, admin);
+  }
+
+  @Post('orders/:id/assign')
+  @HttpCode(200)
+  @Staff('OPERATIONS_MANAGER')
+  assignOrder(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AssignRunnerDto, @CurrentUser() admin: AuthUser) {
+    return this.admin.assignOrder(id, dto.runnerId, admin);
+  }
+
+  @Post('orders/:id/cancel')
+  @HttpCode(200)
+  @Staff('OPERATIONS_MANAGER', 'CUSTOMER_SUPPORT')
+  cancelOrder(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ReasonDto, @CurrentUser() admin: AuthUser) {
+    return this.admin.cancelOrder(id, dto.reason, admin);
   }
 
   @Get('audit-logs')

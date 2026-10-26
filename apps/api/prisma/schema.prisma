@@ -89,6 +89,7 @@ model User {
   ordersAsCustomer  Order[]            @relation("CustomerOrders")
   ordersAsRunner    Order[]            @relation("RunnerOrders")
   orderEvents       OrderEvent[]
+  orderMessages     OrderMessage[]
   reviewsGiven      Review[]           @relation("ReviewAuthor")
   reviewsReceived   Review[]           @relation("ReviewSubject")
   auditLogs         AuditLog[]
@@ -612,6 +613,8 @@ model ServiceCategory {
   icon      String?
   isActive  Boolean @default(true) @map("is_active")
   sortOrder Int     @default(0) @map("sort_order")
+  /// Default errand fee (the runner's service price) for this type of errand, in KES.
+  baseFee   Int     @default(150) @map("base_fee")
 
   orders Order[]
 
@@ -697,9 +700,12 @@ model Order {
   /// Full quote + pricing config used, so the price can always be explained later.
   pricingSnapshot Json @map("pricing_snapshot")
 
-  paymentMethod   PaymentMethod @map("payment_method")
-  /// Customer gives this PIN to the runner on delivery; it releases escrow.
-  deliveryPinHash String?       @map("delivery_pin_hash")
+  paymentMethod PaymentMethod @map("payment_method")
+  /// 4-digit code only the customer can see. The runner enters it on
+  /// delivery to prove they reached the customer (and, from Phase 3, release escrow).
+  deliveryPin   String        @map("delivery_pin")
+  /// Wrong PIN attempts, to stop runners guessing.
+  pinAttempts   Int           @default(0) @map("pin_attempts")
 
   acceptedAt   DateTime? @map("accepted_at")
   pickedUpAt   DateTime? @map("picked_up_at")
@@ -716,6 +722,7 @@ model Order {
   escrow             Escrow?
   reviews            Review[]
   ledgerTransactions LedgerTransaction[]
+  messages           OrderMessage[]
 
   @@index([customerId, createdAt])
   @@index([runnerId, createdAt])
@@ -738,6 +745,20 @@ model OrderEvent {
 
   @@index([orderId, createdAt])
   @@map("order_events")
+}
+
+/// In-app chat between the customer and the runner on an order.
+model OrderMessage {
+  id        String   @id @default(uuid())
+  orderId   String   @map("order_id")
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  senderId  String   @map("sender_id")
+  sender    User     @relation(fields: [senderId], references: [id])
+  body      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([orderId, createdAt])
+  @@map("order_messages")
 }
 
 model Review {

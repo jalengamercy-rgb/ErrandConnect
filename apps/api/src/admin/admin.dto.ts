@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsEnum, IsIn, IsInt, IsOptional, IsString, Length, Max, Min, ValidateIf } from 'class-validator';
-import { RunnerApplicationStatus } from '../generated/prisma/client.js';
+import { IsBoolean, IsEnum, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min, ValidateIf } from 'class-validator';
+import { OrderStatus, RunnerApplicationStatus } from '../generated/prisma/client.js';
 import { Trim } from '../common/dto.js';
 
 export class PageQueryDto {
@@ -51,4 +51,14 @@ export class AuditLogQueryDto extends PageQueryDto {
 
   @Trim() @IsOptional() @IsString()
   entityId?: string;
+}
+
+export class AdminOrderListQueryDto extends PageQueryDto {
+  @IsOptional() @IsEnum(OrderStatus)
+  status?: OrderStatus;
+}
+
+export class AssignRunnerDto {
+  @IsUUID()
+  runnerId: string;
 }
