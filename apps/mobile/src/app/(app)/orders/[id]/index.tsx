@@ -238,6 +238,11 @@ function CustomerView({ order }: { order: Order }) {
               ? ` · ${runner.vehicle.make ?? ''} ${runner.vehicle.model ?? ''} ${runner.vehicle.registrationNumber ?? ''}`
               : ''}
           </ThemedText>
+          {order.expectedBy && (
+            <ThemedText type="smallBold" themeColor="primary">
+              🕒 Expected around {new Date(order.expectedBy).toLocaleTimeString('en-KE', { hour: 'numeric', minute: '2-digit' })}
+            </ThemedText>
+          )}
           {runner.location && (
             <ThemedText type="small">
               📍 About {awayKm!.toFixed(1)} km from the delivery point · updated {timeAgo(runner.location.at)}

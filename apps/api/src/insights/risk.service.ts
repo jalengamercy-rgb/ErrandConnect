@@ -82,7 +82,7 @@ export class RiskService implements OnApplicationBootstrap, OnApplicationShutdow
         rule: 'NEW_ACCOUNT_BIG_ORDER',
         userId: order.customerId,
         orderId: order.id,
-        summary: `KES ${order.total.toLocaleString('en-KE')} errand from an account created ${Math.max(0, Math.round(ageHours))} hours ago`,
+        summary: `KES ${order.total.toLocaleString('en-KE')} errand from an account created ${ageHours < 1 ? 'less than an hour' : `${Math.round(ageHours)} hours`} ago`,
         details: { total: order.total, accountAgeHours: Math.round(ageHours * 10) / 10, paymentMethod: order.paymentMethod },
       });
     }

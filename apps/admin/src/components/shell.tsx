@@ -14,6 +14,11 @@ const NAV: { href: string; label: string; roles: StaffRole[] }[] = [
   { href: '/customers', label: 'Customers', roles: ['OPERATIONS_MANAGER', 'CUSTOMER_SUPPORT'] },
   { href: '/orders', label: 'Orders', roles: ['OPERATIONS_MANAGER', 'CUSTOMER_SUPPORT'] },
   { href: '/map', label: 'Live map', roles: ['OPERATIONS_MANAGER', 'RUNNER_MANAGER', 'CUSTOMER_SUPPORT'] },
+  {
+    href: '/insights',
+    label: 'Insights',
+    roles: ['OPERATIONS_MANAGER', 'FINANCE_MANAGER', 'CUSTOMER_SUPPORT', 'RUNNER_MANAGER', 'MARKETING_MANAGER'],
+  },
   { href: '/disputes', label: 'Disputes', roles: ['OPERATIONS_MANAGER', 'CUSTOMER_SUPPORT'] },
   { href: '/tickets', label: 'Support tickets', roles: ['OPERATIONS_MANAGER', 'CUSTOMER_SUPPORT'] },
   { href: '/businesses', label: 'Companies', roles: ['OPERATIONS_MANAGER', 'FINANCE_MANAGER', 'MERCHANT_MANAGER'] },

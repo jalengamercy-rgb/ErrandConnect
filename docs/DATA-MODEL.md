@@ -46,6 +46,11 @@ Source of truth: [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.pri
 - **banners** – home-screen promotions and ads with impressions, clicks and ad payments received.
 - `users.referral_rewarded_at` – referral rewards paid (once); `merchants.featured_until` – paid featured placement; `invoices.kind` – ORDERS, COMMISSION or FEATURED_LISTING; `orders.surge_fee`, `orders.discount`.
 
+## Insights
+
+- **risk_flags** – findings from the risk rules, deduplicated per rule, person and week, with review status.
+- `orders.predicted_minutes` – delivery time predicted when the runner accepted; `orders.delivery_distance_km` – runner's distance from the drop-off when the PIN was entered.
+
 ## Admin
 
 - **platform_settings** – admin-editable JSON settings (`pricing`, `growth`).

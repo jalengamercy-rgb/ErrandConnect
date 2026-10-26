@@ -76,3 +76,4 @@ npm run test:e2e -w @errandconnect/api    # API tests against the errandconnect_
 - [Pricing](docs/PRICING.md)
 - [API reference](docs/API.md)
 - [Payments & escrow](docs/PAYMENTS.md)
+- [Insights: risk rules and predictions](docs/INSIGHTS.md)

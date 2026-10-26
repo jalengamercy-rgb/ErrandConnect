@@ -33,7 +33,7 @@ Every movement is a balanced double-entry booking (`ledger_transactions` / `ledg
 
 - M-Pesa errands stay `AWAITING_PAYMENT` (hidden from runners) until Safaricom confirms. Customers can resend the prompt (30 s cooldown) or cancel.
 - Runners owing more than KES 1,000 in cash-errand fees can't accept cash jobs; M-Pesa earnings clear the debt.
-- Withdrawals: KES 100 – 150,000, security PIN required. Up to KES 5,000 is paid automatically; above that needs a Finance Manager. Runners can only withdraw to their approved payout account; customers only to their own number. Bank withdrawals are paid manually and marked paid by finance.
+- Withdrawals: KES 100 – 150,000, security PIN required. Up to KES 5,000 is paid automatically (unless the person has an open high risk flag, see INSIGHTS.md); above that needs a Finance Manager. Runners can only withdraw to their approved payout account; customers only to their own number. Bank withdrawals are paid manually and marked paid by finance.
 - Every callback and booking is idempotent: Safaricom repeating a callback never pays twice.
 - Companies on monthly invoicing order up to their credit limit (unpaid company errands = how far the company wallet is below zero). Invoices are due 14 days after they are issued.
 

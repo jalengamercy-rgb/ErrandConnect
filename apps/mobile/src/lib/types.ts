@@ -259,6 +259,8 @@ export interface Order {
     phone: string | null;
   } | null;
   escrowStatus: 'HELD' | 'RELEASED' | 'REFUNDED' | 'ON_HOLD' | 'DISPUTED' | null;
+  /** Predicted arrival while a runner is on the errand. */
+  expectedBy?: string | null;
   /** Only right after creating an M-Pesa order. */
   paymentRequest?: { requested: boolean; message: string };
 }

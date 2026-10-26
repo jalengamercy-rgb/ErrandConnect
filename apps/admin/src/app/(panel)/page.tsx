@@ -34,6 +34,20 @@ export default function DashboardPage() {
     enabled: can('OPERATIONS_MANAGER', 'FINANCE_MANAGER', 'MARKETING_MANAGER'),
   });
 
+  const insights = useQuery({
+    queryKey: ['/admin/insights/summary'],
+    queryFn: () =>
+      api.get<{
+        openFlags: number;
+        highRiskFlags: number;
+        lateErrands: number;
+        onlineRunners: number;
+        shortAreas: number;
+        nextHours: { at: string; expected: number; runnersNeeded: number }[];
+      }>('/admin/insights/summary'),
+    refetchInterval: 60_000,
+  });
+
   if (error) return <ErrorBox error={error} />;
   if (!data) return <Loading />;
 
@@ -96,6 +110,45 @@ export default function DashboardPage() {
           />
         </Link>
       </div>
+
+      {insights.data && (
+        <>
+          <h2 className="mb-2 mt-8 font-semibold">Insights</h2>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Link href="/insights?tab=risk">
+              <Stat
+                label="Risk flags to review"
+                value={insights.data.openFlags}
+                hint={`${insights.data.highRiskFlags} high`}
+                tone={insights.data.highRiskFlags ? 'danger' : insights.data.openFlags ? 'warning' : undefined}
+              />
+            </Link>
+            <Link href="/insights?tab=delivery">
+              <Stat
+                label="Errands running late"
+                value={insights.data.lateErrands}
+                tone={insights.data.lateErrands ? 'warning' : undefined}
+              />
+            </Link>
+            <Link href="/insights?tab=demand">
+              <Stat
+                label="Errands expected next hour"
+                value={insights.data.nextHours[0]?.expected ?? 0}
+                hint={`${insights.data.nextHours[0]?.runnersNeeded ?? 0} runners needed · ${insights.data.onlineRunners} online`}
+                tone={(insights.data.nextHours[0]?.runnersNeeded ?? 0) > insights.data.onlineRunners ? 'warning' : undefined}
+              />
+            </Link>
+            <Link href="/insights?tab=demand">
+              <Stat
+                label="Areas short of runners"
+                value={insights.data.shortAreas}
+                hint="Next 3 hours"
+                tone={insights.data.shortAreas ? 'warning' : undefined}
+              />
+            </Link>
+          </div>
+        </>
+      )}
 
       {daily.data && (
         <div className="mt-8 grid gap-4 lg:grid-cols-2">
