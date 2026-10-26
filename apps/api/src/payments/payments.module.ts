@@ -1,5 +1,6 @@
 import { Logger, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InsightsModule } from '../insights/insights.module.js';
 import { LedgerService } from './ledger.service.js';
 import { DarajaMpesaClient } from './mpesa/daraja.client.js';
 import { FakeMpesaClient } from './mpesa/fake.client.js';
@@ -37,6 +38,7 @@ function createMpesaClient(config: ConfigService): MpesaClient {
 }
 
 @Module({
+  imports: [InsightsModule],
   controllers: [MpesaCallbackController, PaymentsController, AdminFinanceController],
   providers: [
     LedgerService,

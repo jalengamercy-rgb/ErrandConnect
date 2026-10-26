@@ -11,6 +11,7 @@ import { AuthGuard } from './common/auth.guard.js';
 import { HttpThrottlerGuard } from './common/http-throttler.guard.js';
 import { DocumentsModule } from './documents/documents.module.js';
 import { GrowthModule } from './growth/growth.module.js';
+import { InsightsModule } from './insights/insights.module.js';
 import { HealthController } from './health/health.controller.js';
 import { InvoicesModule } from './invoices/invoices.module.js';
 import { InboxModule } from './notifications/inbox.service.js';
@@ -50,6 +51,7 @@ import { SupportModule } from './support/support.module.js';
     MerchantsModule,
     InvoicesModule,
     GrowthModule,
+    InsightsModule,
   ],
   controllers: [HealthController, CategoriesController],
   providers: [

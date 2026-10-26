@@ -104,6 +104,8 @@ model User {
   promoRedemptions  PromoRedemption[]
   subscription      Subscription?
   loyaltyEvents     LoyaltyEvent[]
+  riskFlags         RiskFlag[]         @relation("RiskFlagUser")
+  riskReviews       RiskFlag[]         @relation("RiskFlagReviewer")
 
   @@map("users")
 }
@@ -749,6 +751,10 @@ model Order {
   deliveryPin        String        @map("delivery_pin")
   /// Wrong PIN attempts, to stop runners guessing.
   pinAttempts        Int           @default(0) @map("pin_attempts")
+  /// Minutes from accepting to delivery that we predicted when the runner accepted.
+  predictedMinutes   Int?          @map("predicted_minutes")
+  /// How far the runner was from the drop-off when the PIN was entered.
+  deliveryDistanceKm Float?        @map("delivery_distance_km")
 
   acceptedAt   DateTime? @map("accepted_at")
   pickedUpAt   DateTime? @map("picked_up_at")
@@ -769,6 +775,7 @@ model Order {
   disputes           Dispute[]
   tickets            SupportTicket[]
   promoRedemption    PromoRedemption?
+  riskFlags          RiskFlag[]
 
   @@index([customerId, createdAt])
   @@index([runnerId, createdAt])
@@ -1312,4 +1319,47 @@ model Banner {
 
   @@index([isActive, startsAt])
   @@map("banners")
+}
+
+// ───────────────────────────── Insights ─────────────────────────────
+
+enum RiskSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum RiskFlagStatus {
+  OPEN
+  DISMISSED
+  CONFIRMED
+}
+
+/// Something a fraud/risk rule noticed, waiting for staff to review.
+model RiskFlag {
+  id           String         @id @default(uuid())
+  /// Rule key from RISK_RULES in @errandconnect/shared.
+  rule         String
+  severity     RiskSeverity
+  status       RiskFlagStatus @default(OPEN)
+  /// 0-100, for sorting the queue.
+  score        Int
+  summary      String
+  details      Json?
+  userId       String?        @map("user_id")
+  user         User?          @relation("RiskFlagUser", fields: [userId], references: [id], onDelete: Cascade)
+  orderId      String?        @map("order_id")
+  order        Order?         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /// rule + subject + week: the same finding is only raised once a week.
+  dedupeKey    String         @unique @map("dedupe_key")
+  reviewedById String?        @map("reviewed_by_id")
+  reviewedBy   User?          @relation("RiskFlagReviewer", fields: [reviewedById], references: [id])
+  reviewedAt   DateTime?      @map("reviewed_at")
+  reviewNote   String?        @map("review_note")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  @@index([status, score])
+  @@index([userId])
+  @@map("risk_flags")
 }

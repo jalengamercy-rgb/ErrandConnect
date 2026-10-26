@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   HttpException,
   HttpStatus,
+  Logger,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -36,6 +37,8 @@ import { PromoError, PromosService } from '../growth/promos.service.js';
 import { RewardsService } from '../growth/rewards.service.js';
 import { SubscriptionsService } from '../growth/subscriptions.service.js';
 import { SurgeService } from '../growth/surge.service.js';
+import { PredictionsService } from '../insights/predictions.service.js';
+import { RiskService } from '../insights/risk.service.js';
 import { InboxService } from '../notifications/inbox.service.js';
 import type { CreateOrderDto, LocationDto, OrderDetailsDto, ReviewDto } from './orders.dto.js';
 
@@ -97,7 +100,11 @@ export class OrdersService {
     private readonly subscriptions: SubscriptionsService,
     private readonly promos: PromosService,
     private readonly rewards: RewardsService,
+    private readonly risk: RiskService,
+    private readonly predictions: PredictionsService,
   ) {}
+
+  private readonly logger = new Logger('Orders');
 
   // ─── Pricing & creation (customers) ───
 
@@ -273,6 +280,7 @@ export class OrdersService {
       const paymentRequest = await this.payments
         .requestMpesaPayment(order, phone)
         .catch((error: Error) => ({ requested: false, message: error.message }));
+      await this.checkNewOrder(order);
       return { ...(await this.getForViewer(order.id, { id: customerId, staffRole: null })), paymentRequest };
     }
 
@@ -325,7 +333,13 @@ export class OrdersService {
     });
 
     await this.dispatch.newJob(order);
+    await this.checkNewOrder(order);
     return this.getForViewer(order.id, { id: customerId, staffRole: null });
+  }
+
+  /** Risk checks never stop an order from being placed. */
+  private async checkNewOrder(order: Order) {
+    await this.risk.onOrderCreated(order).catch((error: Error) => this.logger.error(`Risk check failed: ${error.message}`));
   }
 
   // ─── Company approvals ───
@@ -478,6 +492,11 @@ export class OrdersService {
       // Only the customer and staff see payment details.
       payment: canSeePin ? (payments[0] ?? null) : undefined,
       escrowStatus: escrow?.status ?? null,
+      /** Predicted arrival while the errand is in progress. */
+      expectedBy:
+        runnerActive && order.acceptedAt && order.predictedMinutes
+          ? new Date(order.acceptedAt.getTime() + order.predictedMinutes * 60_000)
+          : null,
       quote: (pricingSnapshot as { quote?: unknown } | null)?.quote ?? null,
     };
   }
@@ -562,7 +581,7 @@ export class OrdersService {
     // Only succeeds if nobody else took it first.
     const { count } = await this.prisma.order.updateMany({
       where: { id: orderId, status: 'PENDING', runnerId: null },
-      data: { status: 'ACCEPTED', runnerId, acceptedAt: new Date() },
+      data: { status: 'ACCEPTED', runnerId, acceptedAt: new Date(), predictedMinutes: await this.predictions.predictMinutes(order) },
     });
     if (count === 0) throw new ConflictException('Sorry, another runner already took this job');
 
@@ -609,10 +628,25 @@ export class OrdersService {
     }
 
     const now = new Date();
+    // Where the runner was when the PIN was entered (if their location is recent).
+    const runnerAt = await this.prisma.runnerProfile.findUnique({
+      where: { userId: runnerId },
+      select: { lastLat: true, lastLng: true, lastSeenAt: true },
+    });
+    const fresh =
+      runnerAt?.lastLat != null &&
+      runnerAt.lastLng != null &&
+      !!runnerAt.lastSeenAt &&
+      now.getTime() - runnerAt.lastSeenAt.getTime() < 10 * 60_000;
+    const deliveryDistanceKm = fresh
+      ? Math.round(
+          haversineKm({ lat: runnerAt.lastLat!, lng: runnerAt.lastLng! }, { lat: order.dropoffLat, lng: order.dropoffLng }) * 100,
+        ) / 100
+      : null;
     const rewards = await this.prisma.$transaction(async (tx) => {
       const { count } = await tx.order.updateMany({
         where: { id: orderId, status: order.status },
-        data: { status: 'COMPLETED', deliveredAt: now, completedAt: now },
+        data: { status: 'COMPLETED', deliveredAt: now, completedAt: now, deliveryDistanceKm },
       });
       if (count === 0) throw new ConflictException('The order changed. Please refresh');
       await tx.orderEvent.createMany({
@@ -629,6 +663,9 @@ export class OrdersService {
     });
     this.dispatch.orderUpdated(orderId, order.customerId, runnerId, 'COMPLETED');
     await this.rewards.notify(rewards);
+    await this.risk
+      .onDelivered(order, runnerId, deliveryDistanceKm)
+      .catch((error: Error) => this.logger.error(`Risk check failed: ${error.message}`));
     return this.getForViewer(orderId, { id: runnerId, staffRole: null });
   }
 
@@ -683,9 +720,16 @@ export class OrdersService {
   /** Admin: give a job to a specific runner. */
   async assign(orderId: string, runnerId: string, actorId: string) {
     await this.eligibleRunner(runnerId);
+    const pending = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!pending) throw new NotFoundException('Order not found');
     const { count } = await this.prisma.order.updateMany({
       where: { id: orderId, status: 'PENDING', runnerId: null, customerId: { not: runnerId } },
-      data: { status: 'RUNNER_ASSIGNED', runnerId, acceptedAt: new Date() },
+      data: {
+        status: 'RUNNER_ASSIGNED',
+        runnerId,
+        acceptedAt: new Date(),
+        predictedMinutes: await this.predictions.predictMinutes(pending),
+      },
     });
     if (count === 0) throw new ConflictException('Only orders still looking for a runner can be assigned');
     const order = await this.prisma.order.findUniqueOrThrow({ where: { id: orderId } });

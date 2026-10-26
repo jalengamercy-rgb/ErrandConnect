@@ -15,6 +15,7 @@ import { verifySecret } from '../common/crypto.js';
 import type { Prisma, Withdrawal } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RealtimeService } from '../realtime/realtime.service.js';
+import { RiskService } from '../insights/risk.service.js';
 import { LedgerService } from './ledger.service.js';
 import { MpesaClient, MpesaError, parseB2cCallback } from './mpesa/mpesa.client.js';
 
@@ -36,6 +37,7 @@ export class WithdrawalsService {
     private readonly mpesa: MpesaClient,
     private readonly audit: AuditService,
     private readonly realtime: RealtimeService,
+    private readonly risk: RiskService,
   ) {}
 
   async request(userId: string, walletType: WalletOwnerType, amount: number, pin: string) {
@@ -86,7 +88,10 @@ export class WithdrawalsService {
       return created;
     });
 
-    if (method === 'MPESA' && amount <= AUTO_APPROVE_WITHDRAWAL_LIMIT) return this.sendPayout(withdrawal);
+    // Small M-Pesa withdrawals are paid at once, unless a high-risk flag is open on the account.
+    if (method === 'MPESA' && amount <= AUTO_APPROVE_WITHDRAWAL_LIMIT && !(await this.risk.hasOpenHighRisk(userId))) {
+      return this.sendPayout(withdrawal);
+    }
     return this.view(withdrawal.id);
   }
 
