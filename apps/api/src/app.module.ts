@@ -4,6 +4,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AdminModule } from './admin/admin.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { CategoriesController } from './categories/categories.controller.js';
 import { AuditModule } from './common/audit.service.js';
 import { AuthGuard } from './common/auth.guard.js';
 import { DocumentsModule } from './documents/documents.module.js';
@@ -33,7 +34,7 @@ import { RunnersModule } from './runners/runners.module.js';
     RunnersModule,
     AdminModule,
   ],
-  controllers: [HealthController, PricingController],
+  controllers: [HealthController, PricingController, CategoriesController],
   providers: [
     PricingService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },

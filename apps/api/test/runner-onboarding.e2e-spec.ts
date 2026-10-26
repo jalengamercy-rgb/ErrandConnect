@@ -131,6 +131,12 @@ describe('Runner onboarding & admin review (e2e)', () => {
 
     const progress = await completeOnboarding(app, runner, plate);
     expect(progress.body.percentComplete).toBe(80); // experience, equipment, skills skipped (optional)
+    // Saved answers come back so the app can prefill forms; secrets never do.
+    expect(progress.body.answers.profile.deliveryTypes).toEqual(['MOTORCYCLE', 'WALKING']);
+    expect(progress.body.answers.payoutMethod.type).toBe('MPESA');
+    expect(progress.body.answers.documents.SELFIE.status).toBe('PENDING');
+    expect(progress.body.answers.user).not.toHaveProperty('passwordHash');
+    expect(JSON.stringify(progress.body)).not.toContain('storageKey');
     expect(progress.body.canSubmit).toBe(true);
 
     const submitted = await http(app).post('/runners/me/onboarding/submit').set(auth(runner)).expect(200);

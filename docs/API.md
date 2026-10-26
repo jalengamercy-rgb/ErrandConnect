@@ -36,7 +36,7 @@ Base URL (local): `http://localhost:3000`. Send `Authorization: Bearer <accessTo
 
 ## Runner onboarding (runner accounts)
 
-`GET /runners/me/onboarding` returns `percentComplete`, `steps`, `missingRequired`, `canSubmit` and the verification `tracker`. Each `PUT` returns the same.
+`GET /runners/me/onboarding` returns `percentComplete`, `steps`, `missingRequired`, `canSubmit`, the verification `tracker`, and `answers` (saved values, for prefilling forms). Each `PUT` returns the same.
 
 | Step | Route |
 |---|---|
@@ -75,4 +75,4 @@ The first super admin is created by `npm run db:seed` when `SEED_ADMIN_PHONE` an
 
 ## Public
 
-`GET /health`, `POST /pricing/quote`.
+`GET /health`, `POST /pricing/quote`, `GET /categories`.

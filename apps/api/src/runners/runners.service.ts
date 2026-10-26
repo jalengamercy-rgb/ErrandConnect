@@ -55,9 +55,25 @@ export class RunnersService {
     };
   }
 
+  /** Progress plus the runner's saved answers, so the app can prefill each step. */
   async getOnboarding(userId: string) {
     const state = await this.loadState(userId);
-    return { runnerCode: state.profile.runnerCode, ...computeOnboardingProgress(state), vehicles: state.vehicles };
+    const [user, payoutMethod] = await Promise.all([
+      this.prisma.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: { firstName: true, lastName: true, email: true, dateOfBirth: true, gender: true, nationality: true, whatsapp: true },
+      }),
+      this.prisma.payoutMethod.findFirst({ where: { userId }, omit: { userId: true } }),
+    ]);
+    const documents = Object.fromEntries(
+      [...state.documents].map(([type, d]) => [type, { id: d.id, status: d.status, rejectionReason: d.rejectionReason, createdAt: d.createdAt }]),
+    );
+    return {
+      runnerCode: state.profile.runnerCode,
+      ...computeOnboardingProgress(state),
+      answers: { user, profile: state.profile, payoutMethod, documents },
+      vehicles: state.vehicles,
+    };
   }
 
   /** Profile changes are only allowed before submitting, or after a rejection. */

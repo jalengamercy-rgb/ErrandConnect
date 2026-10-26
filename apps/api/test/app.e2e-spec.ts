@@ -30,6 +30,12 @@ describe('Public endpoints (e2e)', () => {
     return http(app).post('/pricing/quote').send({ errandFee: -5, distanceKm: 2, deliveryType: 'ROCKET' }).expect(400);
   });
 
+  it('GET /categories lists errand types in order', async () => {
+    const res = await http(app).get('/categories').expect(200);
+    expect(res.body[0]).toEqual({ slug: 'grocery-shopping', name: 'Grocery Shopping', icon: null });
+    expect(res.body).toHaveLength(15);
+  });
+
   it('protected routes require login', () => {
     return http(app).get('/me').expect(401);
   });

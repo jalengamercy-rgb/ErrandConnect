@@ -7,9 +7,11 @@
     "apps/*"
   ],
   "scripts": {
+    "postinstall": "npm run build -w @errandconnect/shared",
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "dev:api": "npm run start:dev -w @errandconnect/api",
+    "dev:mobile": "npm run start -w @errandconnect/mobile",
     "db:migrate": "npm run db:migrate -w @errandconnect/api",
     "db:seed": "npm run db:seed -w @errandconnect/api"
   },

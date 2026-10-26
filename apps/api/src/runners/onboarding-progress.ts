@@ -7,8 +7,8 @@ import {
 } from '@errandconnect/shared';
 import type {
   ConsentType,
+  Document,
   DocumentType,
-  ReviewStatus,
   RunnerProfile,
   User,
   Vehicle,
@@ -20,7 +20,7 @@ export interface OnboardingState {
   profile: RunnerProfile;
   vehicles: Vehicle[];
   /** Latest upload of each document type. */
-  documents: Map<DocumentType, { status: ReviewStatus }>;
+  documents: Map<DocumentType, Pick<Document, 'id' | 'status' | 'rejectionReason' | 'createdAt'>>;
   hasEmergencyContact: boolean;
   hasPayoutMethod: boolean;
   /** Latest answer for each consent type. */

@@ -7,17 +7,19 @@ Errands and delivery marketplace for Kenya: customers post errands, verified run
 ```
 apps/
   api/            NestJS backend API (PostgreSQL via Prisma)
+  mobile/         Expo (React Native) app for customers and runners
 packages/
   shared/         Code shared by every app: pricing engine, constants, geo helpers
 docs/             Architecture, data model, pricing and roadmap notes
 ```
 
-Coming in later phases: `apps/mobile` (Expo customer + runner app) and `apps/admin` (Next.js admin panel).
+Coming in later phases: `apps/admin` (Next.js admin panel).
 
 ## Requirements
 
 - Node.js 22+ and npm 11+ (`npm install -g npm@11`)
 - Docker (for PostgreSQL + Redis), or your own PostgreSQL 16 and Redis 7
+- For the mobile app on a phone: the Expo Go app
 
 ## Getting started
 
@@ -39,6 +41,17 @@ curl localhost:3000/health
 curl -X POST localhost:3000/pricing/quote -H 'content-type: application/json' \
   -d '{"errandFee":2000,"distanceKm":2,"deliveryType":"MOTORCYCLE"}'
 ```
+
+## Mobile app
+
+```bash
+cp apps/mobile/.env.example apps/mobile/.env   # set EXPO_PUBLIC_API_URL
+npm run dev:mobile                               # then press a (Android), i (iOS) or w (web)
+```
+
+To try it on your phone, install **Expo Go**, make sure the phone and computer are on the same Wi-Fi, set
+`EXPO_PUBLIC_API_URL` to your computer's local IP (e.g. `http://192.168.1.20:3000`), and scan the QR code.
+SMS codes appear in the API's console until an SMS provider is connected.
 
 ## Tests
 
