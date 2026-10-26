@@ -169,12 +169,13 @@ export class OrdersService {
   }
 
   async listForRunner(runnerId: string, scope?: 'active' | 'past') {
-    return this.prisma.order.findMany({
+    const orders = await this.prisma.order.findMany({
       where: { runnerId, ...this.scopeFilter(scope) },
       orderBy: { createdAt: 'desc' },
       take: 50,
-      select: { id: true, orderNumber: true, status: true, description: true, runnerEarnings: true, createdAt: true, completedAt: true, category: { select: { name: true } } },
+      select: { id: true, orderNumber: true, status: true, description: true, runnerEarnings: true, itemsCost: true, createdAt: true, completedAt: true, category: { select: { name: true } } },
     });
+    return orders.map(({ itemsCost, ...o }) => ({ ...o, runnerFee: o.runnerEarnings - itemsCost }));
   }
 
   private scopeFilter(scope?: 'active' | 'past'): Prisma.OrderWhereInput {
@@ -197,6 +198,8 @@ export class OrdersService {
     const runnerActive = RUNNER_ACTIVE_STATUSES.includes(order.status);
     return {
       ...rest,
+      // What the runner keeps; runnerEarnings also includes paying back the items they bought.
+      runnerFee: order.runnerEarnings - order.itemsCost,
       deliveryPin: canSeePin ? deliveryPin : undefined,
       runner: runner && {
         id: runner.id,
@@ -272,6 +275,7 @@ export class OrdersService {
         awayKm,
         itemsCost: o.itemsCost,
         runnerEarnings: o.runnerEarnings,
+        runnerFee: o.runnerEarnings - o.itemsCost,
         createdAt: o.createdAt,
       }));
   }

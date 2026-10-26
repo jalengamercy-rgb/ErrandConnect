@@ -113,7 +113,7 @@ describe('Errands (e2e)', () => {
     // Nearby runner sees it with distance and earnings; far-away runner doesn't.
     const jobs = await http(app).get('/runners/me/jobs').set(auth(runner)).expect(200);
     const job = jobs.body.find((j: { id: string }) => j.id === orderId);
-    expect(job).toMatchObject({ awayKm: 0, runnerEarnings: created.body.runnerEarnings, category: 'Grocery Shopping' });
+    expect(job).toMatchObject({ awayKm: 0, runnerEarnings: created.body.runnerEarnings, runnerFee: created.body.runnerEarnings - 400, category: 'Grocery Shopping' });
     expect(job).not.toHaveProperty('deliveryPin');
     const farJobs = await http(app).get('/runners/me/jobs').set(auth(farRunner)).expect(200);
     expect(farJobs.body.some((j: { id: string }) => j.id === orderId)).toBe(false);

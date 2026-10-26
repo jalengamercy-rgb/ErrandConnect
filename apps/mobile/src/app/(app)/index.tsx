@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,8 @@ import { api } from '@/lib/api';
 import { ME_QUERY_KEY, useAuth } from '@/lib/auth-context';
 import { getCurrentLocation } from '@/lib/device';
 import { useCategories, useOnboarding } from '@/lib/queries';
+import { OrderRow } from '@/features/orders/components';
+import { useCustomerOrders, useRunnerOrders } from '@/lib/orders';
 
 export default function HomeScreen() {
   const { me } = useAuth();
@@ -72,24 +74,50 @@ function OnlineToggle({ online }: { online: boolean }) {
       </ThemedText>
       {toggle.error && <Notice tone="error">{toggle.error.message}</Notice>}
       <Button title={online ? 'Go offline' : 'Go online'} variant={online ? 'secondary' : 'primary'} loading={toggle.isPending} onPress={() => toggle.mutate()} />
+      {online && <Button title="Find jobs nearby" onPress={() => router.push('/jobs')} />}
+      <CurrentJob />
     </Card>
+  );
+}
+
+function CurrentJob() {
+  const { data } = useRunnerOrders('active');
+  if (!data?.length) return null;
+  return (
+    <>
+      <ThemedText type="smallBold">Your current job</ThemedText>
+      <OrderRow order={data[0]} />
+    </>
   );
 }
 
 function CustomerHome() {
   const theme = useTheme();
   const { data: categories } = useCategories();
+  const { data: active } = useCustomerOrders('active');
   return (
     <>
+      {active && active.length > 0 && (
+        <>
+          <ThemedText type="smallBold">In progress</ThemedText>
+          {active.map((order) => (
+            <OrderRow key={order.id} order={order} />
+          ))}
+        </>
+      )}
       <ThemedText type="smallBold">What do you need done?</ThemedText>
       <View style={styles.grid}>
         {categories?.map((c) => (
-          <View key={c.slug} style={[styles.tile, { backgroundColor: theme.backgroundElement }]}>
+          <Pressable
+            key={c.slug}
+            accessibilityRole="button"
+            onPress={() => router.push({ pathname: '/orders/new', params: { category: c.slug } })}
+            style={({ pressed }) => [styles.tile, { backgroundColor: theme.backgroundElement, opacity: pressed ? 0.7 : 1 }]}>
             <ThemedText type="small">{c.name}</ThemedText>
-          </View>
+          </Pressable>
         ))}
       </View>
-      <Notice>Booking errands is coming soon. Save your addresses now so you&apos;re ready.</Notice>
+      <Button title="My errands" variant="secondary" onPress={() => router.push('/orders')} />
       <Button title="Saved addresses" variant="secondary" onPress={() => router.push('/addresses')} />
     </>
   );

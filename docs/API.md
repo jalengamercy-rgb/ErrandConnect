@@ -56,6 +56,29 @@ Base URL (local): `http://localhost:3000`. Send `Authorization: Bearer <accessTo
 | Submit | `POST /runners/me/onboarding/submit` |
 | Online toggle | `PUT /runners/me/online` (approved runners only) |
 
+## Errands
+
+| Method | Path | Who | Notes |
+|---|---|---|---|
+| POST | `/orders/quote` | Customer | `{ categorySlug, dropoffAddressId \| dropoff{address,lat,lng}, pickup?, deliveryType, urgency?, itemsCost? }` → price breakdown + `distanceKm` |
+| POST | `/orders` | Customer | Same + `description`, `recipientName?`, `recipientPhone?`, `scheduledFor?`, `paymentMethod: CASH`. Limited by verification level (L1 ≤ 5,000, L2 ≤ 20,000). |
+| GET | `/orders?scope=active\|past` | Customer | Own errands |
+| GET | `/orders/:id` | Customer, assigned runner, staff | `deliveryPin` only for the customer; phones only while in progress |
+| POST | `/orders/:id/cancel` `{ reason }` | Customer | Until the runner has picked up |
+| GET | `/runners/me/jobs` | Runner | Open jobs nearby matching delivery type, services and max distance; `runnerFee` is what they keep |
+| POST | `/orders/:id/accept` | Runner | First runner wins; one active job at a time |
+| POST | `/orders/:id/progress` `{ status: AT_STORE\|PICKED_UP\|IN_TRANSIT }` | Runner | Forward only |
+| POST | `/orders/:id/deliver` `{ pin }` | Runner | Customer's PIN completes the order; locks after 5 wrong PINs |
+| POST | `/orders/:id/release` `{ reason }` | Runner | Hand back before pickup |
+| GET | `/runners/me/orders?scope=` | Runner | Jobs taken |
+| PUT | `/runners/me/location` `{ lat, lng }` | Runner | Sent while online, for live tracking |
+| GET / POST | `/orders/:id/messages` | Customer, runner | Chat (open until 24 h after the errand ends) |
+| POST | `/orders/:id/review` `{ stars, comment? }` | Customer, runner | Once each, after completion |
+
+### Live updates (Socket.IO)
+
+Connect with `io(API_URL, { auth: { token: accessToken } })`. Events: `job.new`, `job.taken`, `order.updated`, `order.message`, `runner.location`. Emit `order.subscribe { orderId }` to join an order's room.
+
 ## Admin (staff accounts)
 
 | Method | Path | Roles (plus SUPER_ADMIN) |
@@ -69,6 +92,10 @@ Base URL (local): `http://localhost:3000`. Send `Authorization: Bearer <accessTo
 | GET | `/admin/customers` | Operations, Support |
 | POST | `/admin/customers/:id/verify-id` | Operations, Support |
 | POST | `/admin/users/:id/suspend` `{ reason }`, `/activate` | Operations |
+| GET | `/admin/orders?status=&search=` | Operations, Support |
+| GET | `/admin/orders/:id` | Operations, Support |
+| POST | `/admin/orders/:id/assign` `{ runnerId }` | Operations |
+| POST | `/admin/orders/:id/cancel` `{ reason }` | Operations, Support |
 | GET | `/admin/audit-logs?entityType=&entityId=` | Super admin only |
 
 The first super admin is created by `npm run db:seed` when `SEED_ADMIN_PHONE` and `SEED_ADMIN_PASSWORD` are set.

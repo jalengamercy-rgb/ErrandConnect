@@ -1,6 +1,14 @@
 import { Stack } from 'expo-router';
 
+import { useAuth } from '@/lib/auth-context';
+import { useRunnerLocationReporting } from '@/lib/orders';
+import { useRealtime } from '@/lib/realtime';
+
 export default function AppLayout() {
+  const { me } = useAuth();
+  useRealtime(!!me);
+  useRunnerLocationReporting(me?.runnerProfile?.isOnline === true);
+
   return (
     <Stack screenOptions={{ headerBackTitle: 'Back', headerShadowVisible: false }}>
       <Stack.Screen name="index" options={{ title: 'ErrandCONNECT' }} />
@@ -11,6 +19,11 @@ export default function AppLayout() {
       <Stack.Screen name="addresses/new" options={{ title: 'Add address' }} />
       <Stack.Screen name="runner/onboarding" options={{ title: 'Runner registration' }} />
       <Stack.Screen name="runner/[step]" options={{ title: '' }} />
+      <Stack.Screen name="orders/index" options={{ title: 'My errands' }} />
+      <Stack.Screen name="orders/new" options={{ title: 'New errand' }} />
+      <Stack.Screen name="orders/[id]/index" options={{ title: 'Errand' }} />
+      <Stack.Screen name="orders/[id]/chat" options={{ title: 'Chat' }} />
+      <Stack.Screen name="jobs" options={{ title: 'Available jobs' }} />
     </Stack>
   );
 }

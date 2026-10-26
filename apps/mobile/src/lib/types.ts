@@ -155,3 +155,112 @@ export interface Onboarding {
   };
   vehicles: Vehicle[];
 }
+
+export type OrderStatus =
+  | 'PENDING'
+  | 'ACCEPTED'
+  | 'RUNNER_ASSIGNED'
+  | 'AT_STORE'
+  | 'PICKED_UP'
+  | 'IN_TRANSIT'
+  | 'DELIVERED'
+  | 'COMPLETED'
+  | 'CANCELLED'
+  | 'REFUNDED'
+  | 'DISPUTED';
+
+export type Urgency = 'STANDARD' | 'WITHIN_1_HOUR' | 'WITHIN_30_MIN' | 'WITHIN_15_MIN';
+
+export interface Quote {
+  customer: { itemsCost: number; errandFee: number; deliveryFee: number; urgencyFee: number; serviceFee: number; total: number };
+  runner: { itemsReimbursement: number; errandEarnings: number; deliveryEarnings: number; urgencyEarnings: number; total: number };
+  platform: { total: number };
+  extraKm: number;
+}
+
+export interface OrderSummary {
+  id: string;
+  orderNumber: string;
+  status: OrderStatus;
+  description: string;
+  total?: number;
+  /** Runner lists only: what the runner keeps. */
+  runnerFee?: number;
+  createdAt: string;
+  category: { name: string };
+  dropoffLabel?: string | null;
+}
+
+export interface Order {
+  id: string;
+  orderNumber: string;
+  status: OrderStatus;
+  description: string;
+  category: { name: string };
+  deliveryType: DeliveryType;
+  urgency: Urgency;
+  scheduledFor: string | null;
+  pickupLabel: string | null;
+  pickupAddress: string | null;
+  pickupLat: number | null;
+  pickupLng: number | null;
+  dropoffLabel: string | null;
+  dropoffAddress: string;
+  dropoffLat: number;
+  dropoffLng: number;
+  recipientName: string | null;
+  recipientPhone: string | null;
+  distanceKm: number;
+  itemsCost: number;
+  errandFee: number;
+  deliveryFee: number;
+  urgencyFee: number;
+  serviceFee: number;
+  total: number;
+  runnerEarnings: number;
+  /** What the runner keeps (earnings minus paying back the items). */
+  runnerFee: number;
+  paymentMethod: string;
+  deliveryPin?: string;
+  cancelReason: string | null;
+  createdAt: string;
+  customer: { id: string; firstName: string; lastName: string; photoUrl: string | null; phone?: string };
+  runner: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    photoUrl: string | null;
+    phone?: string;
+    rating: number;
+    ratingCount: number;
+    jobsCompleted: number;
+    vehicle: { type: DeliveryType; registrationNumber: string | null; make: string | null; model: string | null; color: string | null } | null;
+    location: { lat: number; lng: number; at: string } | null;
+  } | null;
+  events: { status: OrderStatus; note: string | null; createdAt: string }[];
+  myReview: { stars: number; comment: string | null } | null;
+}
+
+export interface Job {
+  id: string;
+  orderNumber: string;
+  category: string;
+  description: string;
+  urgency: Urgency;
+  scheduledFor: string | null;
+  pickupAddress: string | null;
+  dropoffAddress: string;
+  distanceKm: number;
+  awayKm: number;
+  itemsCost: number;
+  runnerEarnings: number;
+  runnerFee: number;
+  createdAt: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  body: string;
+  createdAt: string;
+  senderId: string;
+}

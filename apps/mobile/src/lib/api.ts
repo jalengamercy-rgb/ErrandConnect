@@ -20,6 +20,8 @@ let refreshInFlight: Promise<boolean> | null = null;
 let onSessionExpired: (() => void) | null = null;
 
 export const session = {
+  /** Current access token, for the live-updates connection. */
+  accessToken: () => accessToken,
   async start(tokens: TokenPair) {
     accessToken = tokens.accessToken;
     await tokenStorage.setRefreshToken(tokens.refreshToken);
