@@ -4,8 +4,11 @@ build/
 coverage/
 .env
 .env.*
+!.env.test
 !.env.example
 *.log
 .DS_Store
 apps/api/src/generated/
 *.tsbuildinfo
+uploads/
+uploads-test/

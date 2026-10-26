@@ -1,7 +1,9 @@
 import { Body, Controller, HttpCode, Post } from '@nestjs/common';
+import { Public } from '../common/auth-user.js';
 import { PricingService } from './pricing.service.js';
 import { QuoteRequestDto } from './quote.dto.js';
 
+@Public()
 @Controller('pricing')
 export class PricingController {
   constructor(private readonly pricing: PricingService) {}

@@ -59,13 +59,16 @@ model User {
   emailVerifiedAt DateTime? @map("email_verified_at")
   idVerifiedAt    DateTime? @map("id_verified_at")
 
-  status       AccountStatus @default(ACTIVE)
+  status           AccountStatus @default(ACTIVE)
   /// Unique code this user shares to refer others.
-  referralCode String        @unique @map("referral_code")
-  referredById String?       @map("referred_by_id")
-  referredBy   User?         @relation("Referrals", fields: [referredById], references: [id])
-  referrals    User[]        @relation("Referrals")
-  lastLoginAt  DateTime?     @map("last_login_at")
+  referralCode     String        @unique @map("referral_code")
+  referredById     String?       @map("referred_by_id")
+  referredBy       User?         @relation("Referrals", fields: [referredById], references: [id])
+  referrals        User[]        @relation("Referrals")
+  lastLoginAt      DateTime?     @map("last_login_at")
+  /// Consecutive wrong passwords; the account locks briefly after too many.
+  failedLoginCount Int           @default(0) @map("failed_login_count")
+  lockedUntil      DateTime?     @map("locked_until")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

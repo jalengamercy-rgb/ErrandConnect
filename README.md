@@ -24,6 +24,7 @@ Coming in later phases: `apps/mobile` (Expo customer + runner app) and `apps/adm
 ```bash
 npm install
 docker compose up -d                      # PostgreSQL + Redis
+docker compose exec postgres createdb -U errand errandconnect_test   # for e2e tests
 cp apps/api/.env.example apps/api/.env
 npm run build -w @errandconnect/shared
 npm run db:migrate                        # create tables
@@ -43,7 +44,7 @@ curl -X POST localhost:3000/pricing/quote -H 'content-type: application/json' \
 
 ```bash
 npm test                                  # unit tests (all packages)
-npm run test:e2e -w @errandconnect/api    # API tests against the database
+npm run test:e2e -w @errandconnect/api    # API tests against the errandconnect_test database
 ```
 
 ## Docs
@@ -52,3 +53,4 @@ npm run test:e2e -w @errandconnect/api    # API tests against the database
 - [Architecture](docs/ARCHITECTURE.md)
 - [Data model](docs/DATA-MODEL.md)
 - [Pricing](docs/PRICING.md)
+- [API reference](docs/API.md)

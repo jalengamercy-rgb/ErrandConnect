@@ -2,9 +2,11 @@
 // Safe to run more than once: it updates rows instead of duplicating them.
 // Run with: npm run db:seed
 import 'dotenv/config';
-import { DEFAULT_PRICING_CONFIG } from '@errandconnect/shared';
+import { DEFAULT_PRICING_CONFIG, normalizeKenyanPhone } from '@errandconnect/shared';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient, WalletType } from '../src/generated/prisma/client.js';
+import { newReferralCode } from '../src/common/codes.js';
+import { hashSecret } from '../src/common/crypto.js';
 
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
 
@@ -53,7 +55,38 @@ async function main() {
     create: { key: 'pricing', value: DEFAULT_PRICING_CONFIG as object },
   });
 
+  await seedSuperAdmin();
+
   console.log(`Seeded ${CATEGORIES.length} categories, ${PLATFORM_WALLETS.length} platform wallets, pricing settings.`);
+}
+
+/** Creates the first admin account from SEED_ADMIN_PHONE / SEED_ADMIN_PASSWORD, if set. */
+async function seedSuperAdmin() {
+  const rawPhone = process.env.SEED_ADMIN_PHONE;
+  const password = process.env.SEED_ADMIN_PASSWORD;
+  if (!rawPhone || !password) return;
+  const phone = normalizeKenyanPhone(rawPhone);
+  if (!phone) throw new Error('SEED_ADMIN_PHONE is not a valid Kenyan mobile number');
+  if (password.length < 12) throw new Error('SEED_ADMIN_PASSWORD must be at least 12 characters');
+
+  const existing = await prisma.user.findUnique({ where: { phone }, include: { staffProfile: true } });
+  if (existing?.staffProfile) return;
+  if (existing) {
+    await prisma.staffProfile.create({ data: { userId: existing.id, role: 'SUPER_ADMIN' } });
+  } else {
+    await prisma.user.create({
+      data: {
+        phone,
+        firstName: 'Super',
+        lastName: 'Admin',
+        passwordHash: await hashSecret(password),
+        phoneVerifiedAt: new Date(),
+        referralCode: newReferralCode(),
+        staffProfile: { create: { role: 'SUPER_ADMIN' } },
+      },
+    });
+  }
+  console.log(`Super admin ready: ${phone}`);
 }
 
 main()
