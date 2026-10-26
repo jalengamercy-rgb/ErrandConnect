@@ -8,12 +8,11 @@ Errands and delivery marketplace for Kenya: customers post errands, verified run
 apps/
   api/            NestJS backend API (PostgreSQL via Prisma)
   mobile/         Expo (React Native) app for customers and runners
+  admin/          Next.js admin panel for staff
 packages/
   shared/         Code shared by every app: pricing engine, constants, geo helpers
 docs/             Architecture, data model, pricing and roadmap notes
 ```
-
-Coming in later phases: `apps/admin` (Next.js admin panel).
 
 ## Requirements
 
@@ -52,6 +51,15 @@ npm run dev:mobile                               # then press a (Android), i (iO
 To try it on your phone, install **Expo Go**, make sure the phone and computer are on the same Wi-Fi, set
 `EXPO_PUBLIC_API_URL` to your computer's local IP (e.g. `http://192.168.1.20:3000`), and scan the QR code.
 SMS codes appear in the API's console until an SMS provider is connected.
+
+## Admin panel
+
+```bash
+cp apps/admin/.env.example apps/admin/.env.local   # NEXT_PUBLIC_API_URL
+npm run dev:admin                                  # http://localhost:3001
+```
+
+Sign in with a staff account. Create the first one with `SEED_ADMIN_PHONE` / `SEED_ADMIN_PASSWORD` and `npm run db:seed`, then add other staff from the **Staff** page (they must sign up in the app first). Each role only sees the pages it needs.
 
 ## Tests
 

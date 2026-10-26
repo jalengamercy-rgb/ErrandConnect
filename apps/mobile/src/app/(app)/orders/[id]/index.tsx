@@ -20,6 +20,8 @@ import { Spacing } from '@/constants/theme';
 import { PriceBreakdown, StarRating, Timeline } from '@/features/orders/components';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
+import { DISPUTE_TYPES } from '@/lib/support';
+import { ChoiceChips } from '@/components/ui/choice-chips';
 import { directionsUrl, formatKes, mapUrl, orderKeys, useOrder } from '@/lib/orders';
 import type { Order } from '@/lib/types';
 
@@ -86,6 +88,73 @@ function Reasoned({ label, onSubmit, loading }: { label: string; onSubmit: (reas
       />
       <Button title="Never mind" variant="ghost" onPress={() => setOpen(false)} />
     </Card>
+  );
+}
+
+const DISPUTE_WINDOW_MS = 7 * 24 * 60 * 60_000;
+
+/** Report a problem (freezes the errand and its payment for support) or contact support. */
+function ProblemSection({ order }: { order: Order }) {
+  const [open, setOpen] = useState(false);
+  const [type, setType] = useState<string | null>(null);
+  const [description, setDescription] = useState('');
+  // Time when the screen opened (render must not read the clock).
+  const [openedAt] = useState(() => Date.now());
+  const report = useOrderAction(order, async () => {
+    await api.post(`/orders/${order.id}/disputes`, { type, description: description.trim() });
+    setOpen(false);
+    return api.get<Order>(`/orders/${order.id}`);
+  });
+  const completedAt = order.events.findLast((e) => e.status === 'COMPLETED')?.createdAt;
+  const canReport =
+    !!order.runner &&
+    (RUNNER_ACTIVE_STATUSES.includes(order.status) ||
+      (order.status === 'COMPLETED' && !!completedAt && openedAt - new Date(completedAt).getTime() < DISPUTE_WINDOW_MS));
+
+  const contact = (
+    <Button title="Contact support" variant="ghost" onPress={() => router.push({ pathname: '/support', params: { orderId: order.id } })} />
+  );
+  if (order.status === 'DISPUTED') {
+    return (
+      <>
+        <Notice tone="warning">A problem was reported. Our support team is reviewing it and the payment is on hold until then.</Notice>
+        {contact}
+      </>
+    );
+  }
+  return (
+    <>
+      {canReport &&
+        (open ? (
+          <Card>
+            <ThemedText type="smallBold">What went wrong?</ThemedText>
+            <ChoiceChips choices={DISPUTE_TYPES.map((d) => ({ value: d.value, label: d.label }))} value={type} onChange={setType} />
+            <TextField
+              label="Tell us what happened"
+              multiline
+              value={description}
+              onChangeText={setDescription}
+              hint="At least 10 characters"
+            />
+            {report.error && <Notice tone="error">{report.error.message}</Notice>}
+            <Button
+              title="Report problem"
+              variant="danger"
+              disabled={!type || description.trim().length < 10}
+              loading={report.isPending}
+              onPress={() => report.mutate(undefined)}
+            />
+            <Button title="Never mind" variant="ghost" onPress={() => setOpen(false)} />
+          </Card>
+        ) : (
+          <Button title="Report a problem" variant="ghost" onPress={() => setOpen(true)} />
+        ))}
+      <Button
+        title="Contact support"
+        variant="ghost"
+        onPress={() => router.push({ pathname: '/support', params: { orderId: order.id } })}
+      />
+    </>
   );
 }
 
@@ -182,6 +251,7 @@ function CustomerView({ order }: { order: Order }) {
       )}
 
       <RateCard order={order} who={runner?.firstName ?? 'your runner'} />
+      <ProblemSection order={order} />
 
       <Card>
         <ThemedText type="smallBold">Deliver to {order.dropoffLabel ?? ''}</ThemedText>
@@ -381,6 +451,7 @@ function RunnerView({ order }: { order: Order }) {
       )}
 
       <RateCard order={order} who={order.customer.firstName} />
+      <ProblemSection order={order} />
       <Timeline events={order.events} />
 
       {RUNNER_RELEASABLE_STATUSES.includes(order.status) && (

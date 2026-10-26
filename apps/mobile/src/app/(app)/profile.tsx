@@ -63,6 +63,7 @@ export default function ProfileScreen() {
         />
       )}
       {addRole.error && <Notice tone="error">{addRole.error.message}</Notice>}
+      <Button title="Help & support" variant="secondary" onPress={() => router.push('/support')} />
       <Button title="Log out" variant="ghost" onPress={signOut} />
     </Screen>
   );

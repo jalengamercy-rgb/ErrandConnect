@@ -7,7 +7,7 @@
 | 2. Core errand flow (MVP) | Create errand, quote, runner matching, order statuses, live tracking, chat, ratings | Done (cash payments; maps open in Google Maps) |
 | 3. Payments & escrow | M-Pesa STK Push, escrow hold/release with delivery PIN, wallets, B2C withdrawals, refunds | Done (simulated M-Pesa; Daraja ready for credentials) |
 | Pilot | Small launch in a few Nairobi areas | |
-| 4. Admin panel | Dashboard, live map, order/escrow/payment management, disputes, tickets, reports, roles, audit logs | |
+| 4. Admin panel | Dashboard, live map, order/escrow/payment management, disputes, tickets, reports, roles, audit logs | Done (+ in-app inbox, problem reporting and support in the app) |
 | 5. Merchants & businesses | Merchant onboarding, business accounts, teams, invoicing, bulk/scheduled deliveries | |
 | 6. Growth & revenue | Promos, referrals, loyalty, ErrandCONNECT Plus, featured listings, ads, surge pricing | |
 | 7. AI insights | Fraud/risk rules first, then demand, delay and churn prediction once data exists | |

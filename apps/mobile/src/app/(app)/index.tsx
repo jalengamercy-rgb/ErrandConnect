@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import { ME_QUERY_KEY, useAuth } from '@/lib/auth-context';
 import { getCurrentLocation } from '@/lib/device';
 import { useCategories, useOnboarding } from '@/lib/queries';
+import { useNotifications } from '@/lib/support';
 import { OrderRow } from '@/features/orders/components';
 import { formatKes, useCustomerOrders, useRunnerOrders, useWallets } from '@/lib/orders';
 
@@ -25,9 +26,22 @@ export default function HomeScreen() {
       {me.runnerProfile && runnerStatus !== 'APPROVED' && <RunnerApplicationCard />}
       {runnerStatus === 'APPROVED' && <OnlineToggle online={me.runnerProfile!.isOnline} />}
       {me.customerProfile && <CustomerHome />}
+      <NotificationsButton />
       <Button title="Wallet" variant="secondary" onPress={() => router.push('/wallet')} />
       <Button title="Profile & settings" variant="secondary" onPress={() => router.push('/profile')} />
     </Screen>
+  );
+}
+
+function NotificationsButton() {
+  const { data } = useNotifications();
+  const unread = data?.filter((n) => !n.readAt).length ?? 0;
+  return (
+    <Button
+      title={unread ? `Notifications (${unread} new)` : 'Notifications'}
+      variant={unread ? 'primary' : 'secondary'}
+      onPress={() => router.push('/notifications')}
+    />
   );
 }
 

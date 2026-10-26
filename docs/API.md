@@ -86,13 +86,24 @@ Base URL (local): `http://localhost:3000`. Send `Authorization: Bearer <accessTo
 | POST | `/wallets/:type/withdrawals` `{ amount, pin }` | Withdraw to M-Pesa (see docs/PAYMENTS.md) |
 | GET | `/wallets/withdrawals` | Own withdrawals |
 
+## Support & notifications
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/orders/:id/disputes` `{ type, description }` | Customer or runner reports a problem; order becomes `DISPUTED`, escrow `ON_HOLD` |
+| POST / GET | `/support/tickets` | Open a ticket `{ subject, message, orderId? }` / list own tickets |
+| GET | `/support/tickets/:id` | Conversation |
+| POST | `/support/tickets/:id/messages` `{ message }` | Reply (reopens the ticket) |
+| GET | `/me/notifications` | In-app inbox (latest 50) |
+| POST | `/me/notifications/:id/read`, `/me/notifications/read-all` | Mark read |
+
 ## M-Pesa callbacks (called by Safaricom)
 
 `POST /payments/mpesa/stk-callback/:secret`, `/b2c-result/:secret`, `/b2c-timeout/:secret`.
 
 ### Live updates (Socket.IO)
 
-Connect with `io(API_URL, { auth: { token: accessToken } })`. Events: `job.new`, `job.taken`, `order.updated`, `order.message`, `runner.location`, `wallet.updated`. Emit `order.subscribe { orderId }` to join an order's room.
+Connect with `io(API_URL, { auth: { token: accessToken } })`. Events: `job.new`, `job.taken`, `order.updated`, `order.message`, `runner.location`, `wallet.updated`, `notification.new`. Emit `order.subscribe { orderId }` to join an order's room.
 
 ## Admin (staff accounts)
 
@@ -116,6 +127,18 @@ Connect with `io(API_URL, { auth: { token: accessToken } })`. Events: `job.new`,
 | GET | `/admin/payments?status=&search=` | Finance |
 | GET | `/admin/withdrawals?status=` | Finance |
 | POST | `/admin/withdrawals/:id/approve`, `/reject` `{ reason }`, `/mark-paid` `{ reference }` | Finance |
+| GET | `/admin/dashboard` | Any staff |
+| GET | `/admin/reports/daily?days=`, `/reports/categories`, `/reports/top-runners` | Operations, Finance, Marketing |
+| GET | `/admin/reports/orders.csv?from=&to=` | Operations, Finance |
+| GET | `/admin/live-map` | Operations, Runner manager, Support |
+| GET / PUT | `/admin/settings/pricing` | Read: Finance, Operations · Write: Finance (validated, audited) |
+| GET / POST / PATCH | `/admin/categories`, `/admin/categories/:slug` | Operations (Finance can edit fees) |
+| GET | `/admin/reviews?maxStars=&hidden=` · POST `/admin/reviews/:id/visibility` `{ hidden }` | Support, Operations |
+| GET | `/admin/customers/:id` | Operations, Support |
+| POST | `/admin/notifications` `{ audience, title, body, sms? }` | Operations, Marketing |
+| GET / POST | `/admin/disputes`, `/admin/disputes/:id`, `/admin/disputes/:id/resolve` `{ outcome, refundAmount?, resolution }` | Operations (Support can view) |
+| GET / PATCH / POST | `/admin/tickets`, `/admin/tickets/:id`, `/admin/tickets/:id/messages` | Support, Operations |
+| GET / POST / PATCH / DELETE | `/admin/staff`, `/admin/staff/:userId` | Super admin only |
 | GET | `/admin/audit-logs?entityType=&entityId=` | Super admin only |
 
 The first super admin is created by `npm run db:seed` when `SEED_ADMIN_PHONE` and `SEED_ADMIN_PASSWORD` are set.

@@ -25,6 +25,9 @@ export default function AppLayout() {
       <Stack.Screen name="orders/[id]/chat" options={{ title: 'Chat' }} />
       <Stack.Screen name="jobs" options={{ title: 'Available jobs' }} />
       <Stack.Screen name="wallet" options={{ title: 'Wallet' }} />
+      <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
+      <Stack.Screen name="support/index" options={{ title: 'Help & support' }} />
+      <Stack.Screen name="support/[id]" options={{ title: 'Support' }} />
     </Stack>
   );
 }

@@ -5,6 +5,7 @@ import { io, type Socket } from 'socket.io-client';
 import { API_URL, session } from './api';
 import { ME_QUERY_KEY } from './auth-context';
 import { orderKeys } from './orders';
+import { supportKeys } from './support';
 import type { ChatMessage, Order } from './types';
 
 /**
@@ -42,6 +43,8 @@ function attachHandlers(socket: Socket, queryClient: QueryClient) {
     // Payments, refunds and payouts change wallet balances.
     queryClient.invalidateQueries({ queryKey: orderKeys.wallets });
   });
+
+  socket.on('notification.new', () => queryClient.invalidateQueries({ queryKey: supportKeys.notifications }));
 
   socket.on('wallet.updated', () => queryClient.invalidateQueries({ queryKey: orderKeys.wallets }));
 

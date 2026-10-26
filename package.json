@@ -15,7 +15,8 @@
     "db:migrate": "npm run db:migrate -w @errandconnect/api",
     "db:seed": "npm run db:seed -w @errandconnect/api",
     "format": "prettier --write \"apps/*/src/**/*.{ts,tsx}\" \"apps/api/test/**/*.ts\" \"packages/*/src/**/*.ts\"",
-    "format:check": "prettier --check \"apps/*/src/**/*.{ts,tsx}\" \"apps/api/test/**/*.ts\" \"packages/*/src/**/*.ts\""
+    "format:check": "prettier --check \"apps/*/src/**/*.{ts,tsx}\" \"apps/api/test/**/*.ts\" \"packages/*/src/**/*.ts\"",
+    "dev:admin": "npm run dev -w @errandconnect/admin"
   },
   "engines": {
     "node": ">=22",
@@ -33,6 +34,8 @@
     "unrs-resolver": false
   },
   "overrides": {
-    "multer": "^2.5.0"
+    "multer": "^2.5.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
   }
 }
