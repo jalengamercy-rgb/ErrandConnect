@@ -230,14 +230,17 @@ export class BusinessListQueryDto extends PageQueryDto {
   status?: OrgStatus;
 }
 
+/** Credit terms are only applied when finance approves; others approve as prepaid. */
 export class ApproveBusinessDto {
+  @IsOptional()
   @IsInt()
   @Min(0)
   @Max(10_000_000)
-  creditLimit: number;
+  creditLimit?: number;
 
+  @IsOptional()
   @IsBoolean()
-  monthlyInvoicing: boolean;
+  monthlyInvoicing?: boolean;
 }
 
 export class AdminUpdateBusinessDto {

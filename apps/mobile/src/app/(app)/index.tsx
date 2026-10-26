@@ -150,6 +150,7 @@ function CustomerHome() {
           </Pressable>
         ))}
       </View>
+      <Button title="Order from a shop" variant="secondary" onPress={() => router.push('/shops')} />
       <Button title="My errands" variant="secondary" onPress={() => router.push('/orders')} />
       <Button title="Saved addresses" variant="secondary" onPress={() => router.push('/addresses')} />
     </>

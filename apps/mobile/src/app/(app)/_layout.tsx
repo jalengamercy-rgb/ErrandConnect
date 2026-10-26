@@ -28,6 +28,15 @@ export default function AppLayout() {
       <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
       <Stack.Screen name="support/index" options={{ title: 'Help & support' }} />
       <Stack.Screen name="support/[id]" options={{ title: 'Support' }} />
+      <Stack.Screen name="business/index" options={{ title: 'Company accounts' }} />
+      <Stack.Screen name="business/register" options={{ title: 'Register a company' }} />
+      <Stack.Screen name="business/[id]/index" options={{ title: 'Company' }} />
+      <Stack.Screen name="business/[id]/orders" options={{ title: 'Company errands' }} />
+      <Stack.Screen name="invoices" options={{ title: 'Invoices' }} />
+      <Stack.Screen name="shops/index" options={{ title: 'Shops' }} />
+      <Stack.Screen name="shop/index" options={{ title: 'My shop' }} />
+      <Stack.Screen name="shop/register" options={{ title: 'List your shop' }} />
+      <Stack.Screen name="shop/[id]" options={{ title: 'Shop dashboard' }} />
     </Stack>
   );
 }

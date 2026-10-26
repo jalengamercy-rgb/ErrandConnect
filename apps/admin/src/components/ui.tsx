@@ -135,6 +135,8 @@ const STATUS_TONE: Record<string, keyof typeof STATUS_COLORS> = {
   REQUESTED: 'amber',
   OPEN: 'amber',
   AWAITING_PAYMENT: 'amber',
+  PENDING_APPROVAL: 'amber',
+  ISSUED: 'amber',
   ON_HOLD: 'amber',
   ACCEPTED: 'blue',
   RUNNER_ASSIGNED: 'blue',
@@ -150,6 +152,7 @@ const STATUS_TONE: Record<string, keyof typeof STATUS_COLORS> = {
   REFUNDED: 'gray',
   CLOSED: 'gray',
   DRAFT: 'gray',
+  VOID: 'gray',
 };
 
 export function Badge({ status }: { status: string }) {

@@ -331,11 +331,12 @@ export class BusinessesService {
   }
 
   async approve(businessId: string, dto: ApproveBusinessDto, admin: AuthUser) {
-    const business = await this.setStatus(businessId, 'ACTIVE', admin, dto, ['PENDING', 'SUSPENDED', 'REJECTED']);
+    const isFinance = admin.staffRole === 'FINANCE_MANAGER' || admin.staffRole === 'SUPER_ADMIN';
+    const business = await this.setStatus(businessId, 'ACTIVE', admin, isFinance ? dto : {}, ['PENDING', 'SUSPENDED', 'REJECTED']);
     await this.notifyOwners(
       businessId,
       'Company account approved',
-      `${business.name} can now place errands${dto.monthlyInvoicing ? ' and pay by monthly invoice' : ''}.`,
+      `${business.name} can now place errands${business.monthlyInvoicing ? ' and pay by monthly invoice' : ''}.`,
     );
     return business;
   }

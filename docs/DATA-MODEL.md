@@ -17,11 +17,12 @@ Source of truth: [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.pri
 
 ## Organisations
 - **businesses** + **business_members** – company accounts, teams, credit limit, approval limits.
-- **merchants** + **merchant_members** – shops/restaurants.
+- **merchants** + **merchant_members** – shops/restaurants, commission rate, featured flag.
+- **invoices** – monthly bills: company invoices cover `BUSINESS_INVOICE` order totals (`orders.invoice_id`); shop invoices cover commission (`orders.merchant_invoice_id`).
 
 ## Orders
 - **service_categories** – errand types (seeded).
-- **orders** – errand details, address snapshots, full price breakdown + pricing snapshot, delivery PIN hash.
+- **orders** – errand details, address snapshots, full price breakdown + pricing snapshot, delivery PIN hash; optional `business_id` (billed company, `approved_by_id`) and `merchant_id` (shop, `merchant_commission`, `merchant_ready_at`).
 - **order_events** – status timeline.
 - **reviews** – ratings for runners, customers, merchants.
 

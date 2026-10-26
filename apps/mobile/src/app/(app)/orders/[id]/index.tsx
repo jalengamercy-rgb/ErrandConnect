@@ -38,7 +38,10 @@ export default function OrderScreen() {
       </Screen>
     );
   }
-  return order.customer.id === me?.id ? <CustomerView order={order} /> : <RunnerView order={order} />;
+  if (order.customer.id === me?.id) return <CustomerView order={order} />;
+  if (order.runner?.id === me?.id) return <RunnerView order={order} />;
+  // Company admins and shop staff looking at an errand placed by someone else.
+  return <CompanyView order={order} />;
 }
 
 /** Runs an order action and puts the updated order straight into the cache. */
@@ -193,6 +196,16 @@ function CustomerView({ order }: { order: Order }) {
   return (
     <Screen>
       <Header order={order}>
+        {order.business && (
+          <ThemedText type="small" themeColor="textSecondary">
+            🏢 {order.business.name}
+          </ThemedText>
+        )}
+        {order.status === 'PENDING_APPROVAL' && (
+          <ThemedText type="small" themeColor="textSecondary">
+            A company owner or admin needs to approve this. We&apos;ll notify you.
+          </ThemedText>
+        )}
         {order.status === 'PENDING' && (
           <ThemedText type="small" themeColor="textSecondary">
             We&apos;ve told nearby runners. This page updates by itself when one accepts.
@@ -270,7 +283,44 @@ function CustomerView({ order }: { order: Order }) {
   );
 }
 
-const PAYMENT_LABELS = { MPESA: 'M-Pesa', WALLET: 'wallet', CASH: 'cash' } as const;
+function CompanyView({ order }: { order: Order }) {
+  const approve = useOrderAction(order, () => api.post<Order>(`/orders/${order.id}/approve`));
+  const reject = useOrderAction(order, (reason: string) => api.post<Order>(`/orders/${order.id}/reject`, { reason }));
+  return (
+    <Screen>
+      <Header order={order}>
+        <ThemedText type="small" themeColor="textSecondary">
+          Requested by {order.customer.firstName} {order.customer.lastName}
+          {order.business ? ` for ${order.business.name}` : ''}
+        </ThemedText>
+      </Header>
+      {order.status === 'PENDING_APPROVAL' && order.business && (
+        <Card>
+          <ThemedText type="smallBold">Approve {formatKes(order.total)} on the company invoice?</ThemedText>
+          {(approve.error ?? reject.error) && <Notice tone="error">{(approve.error ?? reject.error)!.message}</Notice>}
+          <Button title="Approve" loading={approve.isPending} onPress={() => approve.mutate(undefined)} />
+          <Reasoned label="Decline" loading={reject.isPending} onSubmit={(reason) => reject.mutate(reason)} />
+        </Card>
+      )}
+      {order.runner && (
+        <Card>
+          <ThemedText type="smallBold">
+            Runner: {order.runner.firstName} {order.runner.lastName}
+          </ThemedText>
+        </Card>
+      )}
+      <Card>
+        <ThemedText type="smallBold">Deliver to {order.dropoffLabel ?? ''}</ThemedText>
+        <ThemedText type="small">{order.dropoffAddress}</ThemedText>
+        {order.pickupAddress && <ThemedText type="small">Pickup: {order.pickupAddress}</ThemedText>}
+      </Card>
+      <PriceBreakdown quote={order} distanceKm={order.distanceKm} />
+      <Timeline events={order.events} />
+    </Screen>
+  );
+}
+
+const PAYMENT_LABELS = { MPESA: 'M-Pesa', WALLET: 'wallet', CASH: 'cash', BUSINESS_INVOICE: 'company invoice' } as const;
 
 /** "Check your phone" while waiting for the M-Pesa prompt to be answered. */
 function AwaitingPayment({ order }: { order: Order }) {
@@ -314,6 +364,10 @@ function AwaitingPayment({ order }: { order: Order }) {
 
 function PaymentStatus({ order }: { order: Order }) {
   if (order.status === 'AWAITING_PAYMENT') return null;
+  if (order.status === 'PENDING_APPROVAL') return null;
+  if (order.paymentMethod === 'BUSINESS_INVOICE') {
+    return <Notice tone="success">Billed to {order.business?.name ?? 'your company'} on the monthly invoice.</Notice>;
+  }
   if (order.paymentMethod === 'CASH') {
     const due = RUNNER_ACTIVE_STATUSES.includes(order.status) || order.status === 'PENDING';
     return due ? <Notice>Pay {formatKes(order.total)} in cash to the runner on delivery.</Notice> : null;
@@ -368,6 +422,23 @@ function RunnerView({ order }: { order: Order }) {
           You earn {formatKes(order.runnerFee)}
         </ThemedText>
       </Header>
+
+      {order.merchant && active && (
+        <Card>
+          <ThemedText type="smallBold">🛍️ Collect from {order.merchant.name}</ThemedText>
+          {order.merchant.addressLine && <ThemedText type="small">{order.merchant.addressLine}</ThemedText>}
+          {order.merchantReadyAt ? (
+            <Notice tone="success">The shop says the order is packed and ready.</Notice>
+          ) : (
+            <ThemedText type="small" themeColor="textSecondary">
+              The shop is preparing the order.
+            </ThemedText>
+          )}
+          {order.merchant.phone && (
+            <Button title="Call the shop" variant="ghost" onPress={() => Linking.openURL(`tel:${order.merchant!.phone}`)} />
+          )}
+        </Card>
+      )}
 
       {active &&
         (order.paymentMethod === 'CASH' ? (

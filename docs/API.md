@@ -60,12 +60,13 @@ Base URL (local): `http://localhost:3000`. Send `Authorization: Bearer <accessTo
 
 | Method | Path | Who | Notes |
 |---|---|---|---|
-| POST | `/orders/quote` | Customer | `{ categorySlug, dropoffAddressId \| dropoff{address,lat,lng}, pickup?, deliveryType, urgency?, itemsCost? }` → price breakdown + `distanceKm` |
-| POST | `/orders` | Customer | Same + `description`, `recipientName?`, `recipientPhone?`, `scheduledFor?`, `paymentMethod: MPESA \| WALLET \| CASH`, `mpesaPhone?`. Limited by verification level (L1 ≤ 5,000, L2 ≤ 20,000). M-Pesa orders start as `AWAITING_PAYMENT`. |
+| POST | `/orders/quote` | Customer | `{ categorySlug, dropoffAddressId \| dropoff{address,lat,lng}, pickup?, deliveryType, urgency?, itemsCost?, merchantId?, businessId? }` → price breakdown + `distanceKm`. With `merchantId` the shop is the pickup; with `businessId` the company's branches can be the drop-off. |
+| POST | `/orders` | Customer | Same + `description`, `recipientName?`, `recipientPhone?`, `scheduledFor?`, `paymentMethod: MPESA \| WALLET \| CASH \| BUSINESS_INVOICE`, `mpesaPhone?`. Personal orders are limited by verification level (L1 ≤ 5,000, L2 ≤ 20,000). M-Pesa orders start as `AWAITING_PAYMENT`. `BUSINESS_INVOICE` needs `businessId` of an active company with monthly invoicing; a member's order above their approval limit starts as `PENDING_APPROVAL`. Shop orders record `merchantCommission`. |
 | POST | `/orders/:id/pay` `{ phone? }` | Customer | Send the M-Pesa prompt again |
 | POST | `/orders/:id/payment/refresh` | Customer | Ask M-Pesa about a payment whose callback hasn't arrived |
 | GET | `/orders?scope=active\|past` | Customer | Own errands |
-| GET | `/orders/:id` | Customer, assigned runner, staff | `deliveryPin` only for the customer; phones only while in progress |
+| GET | `/orders/:id` | Customer, assigned runner, company owners/admins, shop staff, staff | `deliveryPin` only for the customer; phones only while in progress |
+| POST | `/orders/:id/approve`, `/orders/:id/reject` `{ reason }` | Company owner/admin | Decide on a `PENDING_APPROVAL` company errand; approving bills the company's credit |
 | POST | `/orders/:id/cancel` `{ reason }` | Customer | Until the runner has picked up |
 | GET | `/runners/me/jobs` | Runner | Open jobs nearby matching delivery type, services and max distance; `runnerFee` is what they keep |
 | POST | `/orders/:id/accept` | Runner | First runner wins; one active job at a time |
@@ -96,6 +97,39 @@ Base URL (local): `http://localhost:3000`. Send `Authorization: Bearer <accessTo
 | POST | `/support/tickets/:id/messages` `{ message }` | Reply (reopens the ticket) |
 | GET | `/me/notifications` | In-app inbox (latest 50) |
 | POST | `/me/notifications/:id/read`, `/me/notifications/read-all` | Mark read |
+
+## Company accounts
+
+| Method | Path | Who | Notes |
+|---|---|---|---|
+| POST | `/businesses` | Anyone | Register `{ name, industry?, registrationNumber?, kraPin?, vatNumber?, companySize?, estMonthlyOrders?, servicesNeeded?, requestedFeatures?, billingEmail?, position? }`; starts `PENDING`. Upload the certificate with `POST /documents` type `BUSINESS_REGISTRATION`. |
+| GET | `/businesses/mine` | Anyone | Companies the user belongs to, with their role |
+| GET / PATCH | `/businesses/:id` | Members (edit: owner/admin) | Details, team, branches, `creditUsed`, `creditAvailable`, `pendingApprovals` |
+| POST | `/businesses/:id/members` `{ phone, role: ADMIN\|MEMBER, position?, approvalLimit? }` | Owner/admin (only the owner adds admins) | The person needs an account first |
+| PATCH / DELETE | `/businesses/:id/members/:userId` | Owner/admin; anyone can remove themselves | The owner can't be removed |
+| POST / DELETE | `/businesses/:id/branches`, `/businesses/:id/branches/:addressId` | Owner/admin | Company delivery points (same fields as `/me/addresses`) |
+| GET | `/businesses/:id/orders?view=PENDING_APPROVAL\|ACTIVE\|PAST` | Members | Owners/admins see all company errands; members see their own |
+| POST | `/businesses/:id/bulk-orders` | Owner/admin | `{ categorySlug, pickup, deliveryType, urgency?, scheduledFor?, items: [{ description, dropoffAddressId \| dropoff, recipientName?, recipientPhone?, itemsCost? }] }` (up to 50). Billed by invoice; the whole batch must fit in the available credit or nothing is created. |
+
+## Shops
+
+| Method | Path | Who | Notes |
+|---|---|---|---|
+| GET | `/merchants?category=&search=&lat=&lng=` | Logged in | Active shops: featured first, then nearest, then best rated |
+| GET | `/merchants/:id` | Logged in | Public shop profile |
+| POST | `/merchants` | Anyone | Register `{ name, categorySlug, addressLine, lat, lng, phone?, email?, description?, registrationNumber?, taxNumber? }`; starts `PENDING` |
+| GET | `/merchants/mine` | Anyone | Shops the user belongs to |
+| GET | `/merchants/:id/dashboard` | Shop members | This month's orders, sales, commission and `commissionOwed` |
+| PATCH | `/merchants/:id` | Shop owner/admin | `{ phone?, email?, description? }` |
+| GET | `/merchants/:id/orders?view=ACTIVE\|PAST` | Shop members | Orders from the shop |
+| POST | `/merchants/:id/orders/:orderId/ready` | Shop members | Tells the runner and customer the order is packed |
+
+## Invoices
+
+| Method | Path | Who | Notes |
+|---|---|---|---|
+| GET | `/invoices`, `/invoices/:id` | Company/shop owners and admins | Own invoices with order lines |
+| POST | `/invoices/:id/pay` `{ phone }` | Company/shop owners and admins | M-Pesa prompt for the full amount |
 
 ## M-Pesa callbacks (called by Safaricom)
 
@@ -138,6 +172,16 @@ Connect with `io(API_URL, { auth: { token: accessToken } })`. Events: `job.new`,
 | POST | `/admin/notifications` `{ audience, title, body, sms? }` | Operations, Marketing |
 | GET / POST | `/admin/disputes`, `/admin/disputes/:id`, `/admin/disputes/:id/resolve` `{ outcome, refundAmount?, resolution }` | Operations (Support can view) |
 | GET / PATCH / POST | `/admin/tickets`, `/admin/tickets/:id`, `/admin/tickets/:id/messages` | Support, Operations |
+| GET | `/admin/businesses?status=&search=`, `/admin/businesses/:id` | Operations, Finance, Merchant manager |
+| POST | `/admin/businesses/:id/approve` `{ creditLimit?, monthlyInvoicing? }` | Operations, Finance, Merchant manager (credit terms only applied for Finance) |
+| POST | `/admin/businesses/:id/reject`, `/suspend` `{ reason }` | Operations, Finance, Merchant manager |
+| PATCH | `/admin/businesses/:id` `{ creditLimit?, monthlyInvoicing? }` | Finance |
+| GET | `/admin/merchants?status=&search=`, `/admin/merchants/:id` | Merchant manager, Operations |
+| POST | `/admin/merchants/:id/approve`, `/reject` `{ reason }`, `/suspend` `{ reason }` | Merchant manager, Operations |
+| PATCH | `/admin/merchants/:id` `{ commissionRate?, isFeatured? }` | Merchant manager, Operations |
+| GET | `/admin/invoices?status=&businessId=&merchantId=`, `/admin/invoices/:id` | Finance |
+| POST | `/admin/invoices/generate` `{ businessId \| merchantId, periodStart, periodEnd }` | Finance: bills completed, not yet invoiced orders whose completion falls in the period |
+| POST | `/admin/invoices/:id/mark-paid` `{ reference }`, `/void` `{ reason }` | Finance; voiding frees the orders for a new invoice |
 | GET / POST / PATCH / DELETE | `/admin/staff`, `/admin/staff/:userId` | Super admin only |
 | GET | `/admin/audit-logs?entityType=&entityId=` | Super admin only |
 

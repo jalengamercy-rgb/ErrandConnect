@@ -12,6 +12,10 @@ Every movement is a balanced double-entry booking (`ledger_transactions` / `ledg
 | Cancelled after paying | `ESCROW` → customer wallet (full refund) |
 | Paid after cancelling, or paid too little | `ESCROW` → customer wallet |
 | Cash errand completed | runner wallet → `PLATFORM_REVENUE` (fee the runner owes; wallet may go negative) |
+| Company errand (invoice) posted or approved | company wallet → `ESCROW` (the company wallet may go down to minus its credit limit) |
+| Company errand cancelled | `ESCROW` → company wallet |
+| Shop order completed | shop wallet → `PLATFORM_REVENUE` (commission on the items cost; the wallet goes negative until invoiced) |
+| Invoice paid (M-Pesa or marked paid) | `EXTERNAL_CLEARING` → company or shop wallet |
 | Withdrawal requested | user wallet → `PAYOUT_PENDING` |
 | Withdrawal paid | `PAYOUT_PENDING` → `EXTERNAL_CLEARING` |
 | Withdrawal failed / rejected | `PAYOUT_PENDING` → user wallet |
@@ -24,6 +28,7 @@ Every movement is a balanced double-entry booking (`ledger_transactions` / `ledg
 - Runners owing more than KES 1,000 in cash-errand fees can't accept cash jobs; M-Pesa earnings clear the debt.
 - Withdrawals: KES 100 – 150,000, security PIN required. Up to KES 5,000 is paid automatically; above that needs a Finance Manager. Runners can only withdraw to their approved payout account; customers only to their own number. Bank withdrawals are paid manually and marked paid by finance.
 - Every callback and booking is idempotent: Safaricom repeating a callback never pays twice.
+- Companies on monthly invoicing order up to their credit limit (unpaid company errands = how far the company wallet is below zero). Invoices are due 14 days after they are issued.
 
 ## Simulated vs real M-Pesa
 

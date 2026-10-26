@@ -88,6 +88,16 @@ describe('Business accounts, shops and invoices (e2e)', () => {
     const support = await createStaff(app, 'CUSTOMER_SUPPORT');
     await http(app).get('/admin/businesses').set(auth(support)).expect(403);
 
+    // Non-finance staff can approve, but not grant credit.
+    const other = await http(app).post('/businesses').set(auth(owner)).send({ name: 'Other Co' }).expect(201);
+    const approved = await http(app)
+      .post(`/admin/businesses/${other.body.id}/approve`)
+      .set(auth(merchantManager))
+      .send({ creditLimit: 50_000, monthlyInvoicing: true })
+      .expect(200);
+    expect(approved.body).toMatchObject({ status: 'ACTIVE', creditLimit: 0, monthlyInvoicing: false });
+    await http(app).patch(`/admin/businesses/${other.body.id}`).set(auth(merchantManager)).send({ creditLimit: 50_000 }).expect(403);
+
     await http(app)
       .post(`/admin/businesses/${created.body.id}/reject`)
       .set(auth(merchantManager))

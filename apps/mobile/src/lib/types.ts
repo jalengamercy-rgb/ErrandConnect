@@ -207,7 +207,12 @@ export interface Order {
   runnerEarnings: number;
   /** What the runner keeps (earnings minus paying back the items). */
   runnerFee: number;
-  paymentMethod: 'MPESA' | 'WALLET' | 'CASH';
+  paymentMethod: 'MPESA' | 'WALLET' | 'CASH' | 'BUSINESS_INVOICE';
+  /** Company the errand is billed to, if any. */
+  business: { id: string; name: string } | null;
+  /** Shop the errand is from, if any. */
+  merchant: { id: string; name: string; phone: string | null; addressLine: string | null } | null;
+  merchantReadyAt: string | null;
   paidAt: string | null;
   deliveryPin?: string;
   cancelReason: string | null;
