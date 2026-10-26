@@ -1,4 +1,4 @@
-import { DELIVERY_TYPES, RUNNER_PROGRESS_STATUSES, URGENCY_LEVELS, type DeliveryType, type RunnerProgressStatus, type Urgency } from '@errandconnect/shared';
+import { DELIVERY_TYPES, PAYMENT_METHODS, RUNNER_PROGRESS_STATUSES, type PaymentMethodChoice, URGENCY_LEVELS, type DeliveryType, type RunnerProgressStatus, type Urgency } from '@errandconnect/shared';
 import { Type } from 'class-transformer';
 import {
   IsIn,
@@ -76,9 +76,12 @@ export class CreateOrderDto extends OrderDetailsDto {
   @IsOptional() @IsISO8601()
   scheduledFor?: string;
 
-  /** Cash only until M-Pesa escrow arrives in Phase 3. */
-  @IsIn(['CASH'])
-  paymentMethod: 'CASH';
+  @IsIn(PAYMENT_METHODS)
+  paymentMethod: PaymentMethodChoice;
+
+  /** Phone that receives the M-Pesa prompt; defaults to the customer's number. */
+  @IsOptional() @IsKenyanPhone()
+  mpesaPhone?: string;
 }
 
 export class OrderListQueryDto {

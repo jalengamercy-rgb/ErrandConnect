@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import {
   ACTIVE_ORDER_STATUSES,
+  CASH_DEBT_LIMIT,
   CUSTOMER_CANCELLABLE_STATUSES,
   DEFAULT_JOB_RADIUS_KM,
   ORDER_LIMIT_BY_LEVEL,
@@ -27,6 +28,8 @@ import { OrderStatus, Prisma, type Address, type Order } from '../generated/pris
 import { PricingService } from '../pricing/pricing.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RealtimeService } from '../realtime/realtime.service.js';
+import { DispatchService, jobStart } from '../realtime/dispatch.service.js';
+import { PaymentsService } from '../payments/payments.service.js';
 import type { CreateOrderDto, LocationDto, OrderDetailsDto, ReviewDto } from './orders.dto.js';
 
 const MAX_ACTIVE_ORDERS_PER_CUSTOMER = 5;
@@ -49,6 +52,8 @@ const ORDER_INCLUDE = {
   },
   events: { orderBy: { createdAt: 'asc' }, select: { status: true, note: true, createdAt: true } },
   reviews: { select: { authorId: true, stars: true, comment: true } },
+  escrow: { select: { status: true } },
+  payments: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true, failureReason: true, providerReceipt: true, phone: true, createdAt: true } },
 } satisfies Prisma.OrderInclude;
 
 type OrderWithDetails = Prisma.OrderGetPayload<{ include: typeof ORDER_INCLUDE }>;
@@ -64,6 +69,8 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly pricing: PricingService,
     private readonly realtime: RealtimeService,
+    private readonly dispatch: DispatchService,
+    private readonly payments: PaymentsService,
   ) {}
 
   // ─── Pricing & creation (customers) ───
@@ -118,8 +125,8 @@ export class OrdersService {
       async (code) => !!(await this.prisma.order.findUnique({ where: { orderNumber: code }, select: { id: true } })),
     );
 
-    const order = await this.prisma.order.create({
-      data: {
+    const method = dto.paymentMethod;
+    const data = {
         orderNumber,
         customerId,
         categorySlug: category.slug,
@@ -147,14 +154,40 @@ export class OrdersService {
         runnerEarnings: quote.runner.total,
         platformFee: quote.platform.total,
         pricingSnapshot: { quote, config } as unknown as Prisma.InputJsonValue,
-        paymentMethod: dto.paymentMethod,
+        paymentMethod: method,
         deliveryPin: randomDigits(4),
-        events: { create: { status: 'PENDING', actorId: customerId, note: 'Errand posted' } },
-      },
+    } satisfies Omit<Prisma.OrderUncheckedCreateInput, 'status'>;
+
+    if (method === 'MPESA') {
+      // Hidden from runners until M-Pesa confirms the payment.
+      const order = await this.prisma.order.create({
+        data: {
+          ...data,
+          status: 'AWAITING_PAYMENT',
+          events: { create: { status: 'AWAITING_PAYMENT', actorId: customerId, note: 'Waiting for M-Pesa payment' } },
+        },
+      });
+      const phone = dto.mpesaPhone ?? (await this.prisma.user.findUniqueOrThrow({ where: { id: customerId }, select: { phone: true } })).phone;
+      // If the prompt can't be sent, the order stays unpaid and the customer can retry.
+      const paymentRequest = await this.payments.requestMpesaPayment(order, phone).catch((error: Error) => ({ requested: false, message: error.message }));
+      return { ...(await this.getForViewer(order.id, { id: customerId, staffRole: null })), paymentRequest };
+    }
+
+    const order = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.order.create({
+        data: {
+          ...data,
+          status: 'PENDING',
+          paidAt: method === 'WALLET' ? new Date() : null,
+          events: { create: { status: 'PENDING', actorId: customerId, note: method === 'WALLET' ? 'Errand posted · paid from wallet' : 'Errand posted · cash on delivery' } },
+        },
+      });
+      if (method === 'WALLET') await this.payments.holdFromWallet(tx, created);
+      return created;
     });
 
-    await this.notifyNewJob(order);
-    return this.getForViewer(order.id, { id: customerId } as AuthUser);
+    await this.dispatch.newJob(order);
+    return this.getForViewer(order.id, { id: customerId, staffRole: null });
   }
 
   // ─── Reading ───
@@ -194,7 +227,7 @@ export class OrdersService {
   }
 
   private toView(order: OrderWithDetails, canSeePin: boolean, viewerId: string) {
-    const { deliveryPin, pinAttempts: _pinAttempts, pricingSnapshot, runner, reviews, ...rest } = order;
+    const { deliveryPin, pinAttempts: _pinAttempts, pricingSnapshot, runner, reviews, payments, escrow, ...rest } = order;
     const runnerActive = RUNNER_ACTIVE_STATUSES.includes(order.status);
     return {
       ...rest,
@@ -219,6 +252,9 @@ export class OrdersService {
       },
       customer: { ...order.customer, phone: runnerActive || canSeePin ? order.customer.phone : undefined },
       myReview: reviews.find((r) => r.authorId === viewerId) ?? null,
+      // Only the customer and staff see payment details.
+      payment: canSeePin ? (payments[0] ?? null) : undefined,
+      escrowStatus: escrow?.status ?? null,
       quote: (pricingSnapshot as { quote?: unknown } | null)?.quote ?? null,
     };
   }
@@ -229,12 +265,6 @@ export class OrdersService {
     const profile = await this.prisma.runnerProfile.findUnique({ where: { userId: runnerId } });
     if (!profile || profile.applicationStatus !== 'APPROVED') throw new ForbiddenException('Your runner account is not approved yet');
     return profile;
-  }
-
-  private jobStart(order: Pick<Order, 'pickupLat' | 'pickupLng' | 'dropoffLat' | 'dropoffLng'>) {
-    return order.pickupLat != null && order.pickupLng != null
-      ? { lat: order.pickupLat, lng: order.pickupLng }
-      : { lat: order.dropoffLat, lng: order.dropoffLng };
   }
 
   /** Open errands this runner can take, nearest first. */
@@ -259,7 +289,7 @@ export class OrdersService {
     });
 
     return orders
-      .map((o) => ({ order: o, awayKm: Math.round(haversineKm(here, this.jobStart(o)) * 10) / 10 }))
+      .map((o) => ({ order: o, awayKm: Math.round(haversineKm(here, jobStart(o)) * 10) / 10 }))
       .filter((j) => j.awayKm <= radius)
       .sort((a, b) => a.awayKm - b.awayKm)
       .map(({ order: o, awayKm }) => ({
@@ -280,24 +310,6 @@ export class OrdersService {
       }));
   }
 
-  /** Tells online runners who could take this job that it exists. */
-  private async notifyNewJob(order: Order) {
-    const runners = await this.prisma.runnerProfile.findMany({
-      where: {
-        applicationStatus: 'APPROVED',
-        isOnline: true,
-        userId: { not: order.customerId },
-        deliveryTypes: { has: order.deliveryType },
-        servicesOffered: { has: order.categorySlug },
-        lastLat: { not: null },
-      },
-      select: { userId: true, lastLat: true, lastLng: true, maxDistanceKm: true },
-    });
-    const start = this.jobStart(order);
-    const nearby = runners.filter((r) => haversineKm({ lat: r.lastLat!, lng: r.lastLng! }, start) <= (r.maxDistanceKm ?? DEFAULT_JOB_RADIUS_KM));
-    this.realtime.toUsers(nearby.map((r) => r.userId), 'job.new', { orderId: order.id });
-  }
-
   async accept(orderId: string, runnerId: string) {
     const profile = await this.eligibleRunner(runnerId);
     if (!profile.isOnline) throw new ForbiddenException('Go online to accept jobs');
@@ -310,6 +322,14 @@ export class OrdersService {
     if (!profile.deliveryTypes.includes(order.deliveryType) || !profile.servicesOffered.includes(order.categorySlug)) {
       throw new ForbiddenException('This job does not match your delivery type or services');
     }
+    if (order.paymentMethod === 'CASH') {
+      const wallet = await this.prisma.wallet.findUnique({ where: { type_userId: { type: 'RUNNER', userId: runnerId } }, select: { balance: true } });
+      if ((wallet?.balance ?? 0) < -CASH_DEBT_LIMIT) {
+        throw new ForbiddenException(
+          `You owe KES ${(-wallet!.balance).toLocaleString('en-KE')} in fees from cash errands. Complete M-Pesa errands to clear it before taking cash jobs`,
+        );
+      }
+    }
 
     // Only succeeds if nobody else took it first.
     const { count } = await this.prisma.order.updateMany({
@@ -319,8 +339,8 @@ export class OrdersService {
     if (count === 0) throw new ConflictException('Sorry, another runner already took this job');
 
     await this.prisma.orderEvent.create({ data: { orderId, status: 'ACCEPTED', actorId: runnerId, note: 'Runner accepted' } });
-    this.realtime.toAllRunners('job.taken', { orderId });
-    this.emitUpdate(orderId, order.customerId, runnerId, 'ACCEPTED');
+    this.dispatch.jobTaken(orderId);
+    this.dispatch.orderUpdated(orderId, order.customerId, runnerId, 'ACCEPTED');
     return this.getForViewer(orderId, { id: runnerId, staffRole: null });
   }
 
@@ -341,7 +361,7 @@ export class OrdersService {
     });
     if (count === 0) throw new ConflictException('The order changed. Please refresh');
     await this.prisma.orderEvent.create({ data: { orderId, status, actorId: runnerId, lat: at?.lat, lng: at?.lng } });
-    this.emitUpdate(orderId, order.customerId, runnerId, status);
+    this.dispatch.orderUpdated(orderId, order.customerId, runnerId, status);
     return this.getForViewer(orderId, { id: runnerId, staffRole: null });
   }
 
@@ -372,8 +392,10 @@ export class OrdersService {
         ],
       });
       await tx.runnerProfile.update({ where: { userId: runnerId }, data: { jobsCompleted: { increment: 1 } } });
+      if (order.paidAt) await this.payments.releaseEscrow(tx, order, runnerId);
+      else await this.payments.chargeCashCommission(tx, order, runnerId);
     });
-    this.emitUpdate(orderId, order.customerId, runnerId, 'COMPLETED');
+    this.dispatch.orderUpdated(orderId, order.customerId, runnerId, 'COMPLETED');
     return this.getForViewer(orderId, { id: runnerId, staffRole: null });
   }
 
@@ -385,14 +407,19 @@ export class OrdersService {
 
   async cancel(order: Order, actorId: string, reason: string, allowed: readonly OrderStatus[], refusal: string) {
     if (!allowed.includes(order.status)) throw new ConflictException(refusal);
-    const { count } = await this.prisma.order.updateMany({
-      where: { id: order.id, status: order.status },
-      data: { status: 'CANCELLED', cancelledAt: new Date(), cancelReason: reason },
+    await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.order.updateMany({
+        where: { id: order.id, status: order.status },
+        data: { status: 'CANCELLED', cancelledAt: new Date(), cancelReason: reason },
+      });
+      if (count === 0) throw new ConflictException('The order changed. Please refresh');
+      const refunded = await this.payments.refundEscrow(tx, order);
+      await tx.orderEvent.create({
+        data: { orderId: order.id, status: 'CANCELLED', actorId, note: refunded ? `${reason} · KES ${order.total} refunded to wallet` : reason },
+      });
     });
-    if (count === 0) throw new ConflictException('The order changed. Please refresh');
-    await this.prisma.orderEvent.create({ data: { orderId: order.id, status: 'CANCELLED', actorId, note: reason } });
-    if (order.status === 'PENDING') this.realtime.toAllRunners('job.taken', { orderId: order.id });
-    this.emitUpdate(order.id, order.customerId, order.runnerId, 'CANCELLED');
+    if (order.status === 'PENDING') this.dispatch.jobTaken(order.id);
+    this.dispatch.orderUpdated(order.id, order.customerId, order.runnerId, 'CANCELLED');
     return this.getForViewer(order.id, { id: order.customerId, staffRole: null });
   }
 
@@ -408,8 +435,8 @@ export class OrdersService {
     });
     if (count === 0) throw new ConflictException('The order changed. Please refresh');
     await this.prisma.orderEvent.create({ data: { orderId, status: 'PENDING', actorId: runnerId, note: `Runner released the job: ${reason}` } });
-    this.emitUpdate(orderId, order.customerId, runnerId, 'PENDING');
-    await this.notifyNewJob({ ...order, status: 'PENDING', runnerId: null });
+    this.dispatch.orderUpdated(orderId, order.customerId, runnerId, 'PENDING');
+    await this.dispatch.newJob({ ...order, status: 'PENDING', runnerId: null });
     return { released: true };
   }
 
@@ -423,15 +450,9 @@ export class OrdersService {
     if (count === 0) throw new ConflictException('Only orders still looking for a runner can be assigned');
     const order = await this.prisma.order.findUniqueOrThrow({ where: { id: orderId } });
     await this.prisma.orderEvent.create({ data: { orderId, status: 'RUNNER_ASSIGNED', actorId, note: 'Assigned by support' } });
-    this.realtime.toAllRunners('job.taken', { orderId });
-    this.emitUpdate(orderId, order.customerId, runnerId, 'RUNNER_ASSIGNED');
+    this.dispatch.jobTaken(orderId);
+    this.dispatch.orderUpdated(orderId, order.customerId, runnerId, 'RUNNER_ASSIGNED');
     return this.getForViewer(orderId, { id: actorId, staffRole: 'SUPER_ADMIN' });
-  }
-
-  private emitUpdate(orderId: string, customerId: string, runnerId: string | null, status: OrderStatus) {
-    const payload = { orderId, status };
-    this.realtime.toUsers([customerId, runnerId], 'order.updated', payload);
-    this.realtime.toOrder(orderId, 'order.updated', payload);
   }
 
   // ─── Live location ───

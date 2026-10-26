@@ -1,4 +1,4 @@
-import { Global, Injectable, Module } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import type { Server } from 'socket.io';
 
 export const RUNNERS_ROOM = 'runners';
@@ -31,7 +31,3 @@ export class RealtimeService {
     this.server?.to(RUNNERS_ROOM).emit(event, payload);
   }
 }
-
-@Global()
-@Module({ providers: [RealtimeService], exports: [RealtimeService] })
-export class RealtimeServiceModule {}

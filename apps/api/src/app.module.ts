@@ -13,7 +13,7 @@ import { HealthController } from './health/health.controller.js';
 import { MessagingModule } from './notifications/messaging.service.js';
 import { OrdersModule } from './orders/orders.module.js';
 import { PricingModule } from './pricing/pricing.module.js';
-import { RealtimeServiceModule } from './realtime/realtime.service.js';
+import { RealtimeServiceModule } from './realtime/realtime.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { RunnersModule } from './runners/runners.module.js';
 

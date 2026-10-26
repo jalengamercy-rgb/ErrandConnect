@@ -622,6 +622,8 @@ model ServiceCategory {
 }
 
 enum OrderStatus {
+  /// M-Pesa payment requested but not yet confirmed. Hidden from runners.
+  AWAITING_PAYMENT
   PENDING
   ACCEPTED
   RUNNER_ASSIGNED
@@ -701,6 +703,10 @@ model Order {
   pricingSnapshot Json @map("pricing_snapshot")
 
   paymentMethod PaymentMethod @map("payment_method")
+  /// Number the M-Pesa payment prompt is sent to.
+  mpesaPhone    String?       @map("mpesa_phone")
+  /// When the customer's money reached escrow (M-Pesa or wallet orders).
+  paidAt        DateTime?     @map("paid_at")
   /// 4-digit code only the customer can see. The runner enters it on
   /// delivery to prove they reached the customer (and, from Phase 3, release escrow).
   deliveryPin   String        @map("delivery_pin")
@@ -836,6 +842,8 @@ enum WalletType {
   ESCROW
   /// Mirrors money held at M-Pesa / the bank, so the ledger always balances.
   EXTERNAL_CLEARING
+  /// Withdrawals requested but not yet paid out.
+  PAYOUT_PENDING
 }
 
 model Wallet {
@@ -943,7 +951,10 @@ model Withdrawal {
   /// Copy of the payout details at request time.
   destination       Json
   status            WithdrawalStatus @default(REQUESTED)
-  providerReference String?          @map("provider_reference")
+  /// e.g. M-Pesa B2C ConversationID.
+  providerReference String?          @unique @map("provider_reference")
+  /// e.g. M-Pesa transaction ID once paid.
+  providerReceipt   String?          @map("provider_receipt")
   reviewedById      String?          @map("reviewed_by_id")
   note              String?
   createdAt         DateTime         @default(now()) @map("created_at")
