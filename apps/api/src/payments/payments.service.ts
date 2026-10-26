@@ -231,9 +231,9 @@ export class PaymentsService implements OnModuleInit {
   }
 
   /** Delivery confirmed: pay the runner and the platform from escrow. */
-  async releaseEscrow(tx: Tx, order: Order, runnerId: string) {
+  async releaseEscrow(tx: Tx, order: Order, runnerId: string, { includeOnHold = false } = {}) {
     const held = await tx.escrow.updateMany({
-      where: { orderId: order.id, status: 'HELD' },
+      where: { orderId: order.id, status: { in: includeOnHold ? ['HELD', 'ON_HOLD'] : ['HELD'] } },
       data: { status: 'RELEASED', releasedAt: new Date() },
     });
     if (held.count === 0) throw new ConflictException('Payment for this errand is on hold. Please contact support');
@@ -274,14 +274,31 @@ export class PaymentsService implements OnModuleInit {
   }
 
   /** Cancelled after paying: everything goes back to the customer's wallet. */
-  async refundEscrow(tx: Tx, order: Order) {
+  async refundEscrow(tx: Tx, order: Order, { includeOnHold = false } = {}) {
     const held = await tx.escrow.updateMany({
-      where: { orderId: order.id, status: 'HELD' },
+      where: { orderId: order.id, status: { in: includeOnHold ? ['HELD', 'ON_HOLD'] : ['HELD'] } },
       data: { status: 'REFUNDED', releasedAt: new Date() },
     });
     if (held.count === 0) return false;
     await this.toCustomerWallet(tx, order, order.total, `Refund for cancelled errand ${order.orderNumber}`, `refund:${order.id}`);
     return true;
+  }
+
+  /** Goodwill credit from platform revenue, e.g. after a dispute on an errand already paid out. */
+  async creditFromPlatform(tx: Tx, order: Order, amount: number, reason: string) {
+    const [platform, wallet] = await Promise.all([
+      this.ledger.systemWallet(tx, 'PLATFORM_REVENUE'),
+      this.ledger.userWallet(tx, order.customerId, 'CUSTOMER'),
+    ]);
+    await this.ledger.post(tx, {
+      type: 'ADJUSTMENT',
+      description: reason,
+      orderId: order.id,
+      entries: [
+        { walletId: platform.id, amount: -amount },
+        { walletId: wallet.id, amount },
+      ],
+    });
   }
 
   async ensureOrderOwner(orderId: string, customerId: string) {

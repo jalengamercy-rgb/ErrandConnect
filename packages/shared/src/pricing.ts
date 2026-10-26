@@ -194,3 +194,47 @@ export function calculateQuote(input: QuoteInput, config: PricingConfig = DEFAUL
 
   return { customer, runner, platform, extraKm };
 }
+
+/**
+ * Checks a pricing config (e.g. one edited in the admin panel).
+ * Returns a list of problems; empty means it's valid.
+ */
+export function validatePricingConfig(config: unknown): string[] {
+  const errors: string[] = [];
+  const c = config as Partial<PricingConfig> | null;
+  const money = (v: unknown) => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 1_000_000;
+  const rate = (v: unknown) => typeof v === 'number' && v >= 0 && v <= 1;
+  if (!c || typeof c !== 'object') return ['Pricing must be an object'];
+
+  if (!rate(c.commissionRate)) errors.push('commissionRate must be between 0 and 1');
+  if (!rate(c.deliveryRunnerShare)) errors.push('deliveryRunnerShare must be between 0 and 1');
+
+  for (const type of ['WALKING', 'BICYCLE', 'MOTORCYCLE', 'CAR', 'VAN', 'PICKUP', 'TRUCK'] as const) {
+    const d = c.delivery?.[type];
+    if (!d || !money(d.baseFee) || !money(d.perKm) || !(typeof d.includedKm === 'number' && d.includedKm >= 0 && d.includedKm <= 100)) {
+      errors.push(`delivery.${type} needs whole-shilling baseFee and perKm, and includedKm between 0 and 100`);
+    }
+  }
+
+  const tiers = c.serviceFeeTiers;
+  if (!Array.isArray(tiers) || tiers.length === 0) {
+    errors.push('serviceFeeTiers needs at least one tier');
+  } else {
+    tiers.forEach((t, i) => {
+      if (!money(t?.fee)) errors.push(`serviceFeeTiers[${i}].fee must be whole shillings`);
+      const last = i === tiers.length - 1;
+      if (last ? t?.below !== null : !money(t?.below))
+        errors.push(`serviceFeeTiers[${i}].below must be ${last ? 'null (no upper limit)' : 'whole shillings'}`);
+      if (i > 0 && !last && money(t?.below) && money(tiers[i - 1]?.below) && t.below! <= tiers[i - 1].below!) {
+        errors.push('serviceFeeTiers must go from lowest to highest');
+      }
+    });
+  }
+
+  for (const level of ['STANDARD', 'WITHIN_1_HOUR', 'WITHIN_30_MIN', 'WITHIN_15_MIN'] as const) {
+    const u = c.urgency?.[level];
+    if (!u || !money(u.fee) || !rate(u.runnerShare))
+      errors.push(`urgency.${level} needs a whole-shilling fee and runnerShare between 0 and 1`);
+  }
+  return errors;
+}

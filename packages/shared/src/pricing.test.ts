@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DELIVERY_TYPES, URGENCY_LEVELS } from './constants';
-import { calculateQuote, DEFAULT_PRICING_CONFIG, deliveryFeeFor, PricingError, serviceFeeFor } from './pricing';
+import { calculateQuote, DEFAULT_PRICING_CONFIG, deliveryFeeFor, PricingError, serviceFeeFor, validatePricingConfig } from './pricing';
 import { haversineKm } from './geo';
 
 describe('calculateQuote', () => {
@@ -93,5 +93,31 @@ describe('haversineKm', () => {
     const cbd = { lat: -1.2864, lng: 36.8172 };
     const westlands = { lat: -1.2676, lng: 36.8108 };
     expect(haversineKm(cbd, westlands)).toBeCloseTo(2.2, 0);
+  });
+});
+
+describe('validatePricingConfig', () => {
+  it('accepts the defaults', () => {
+    expect(validatePricingConfig(DEFAULT_PRICING_CONFIG)).toEqual([]);
+  });
+
+  it('reports each problem', () => {
+    const broken = {
+      ...DEFAULT_PRICING_CONFIG,
+      commissionRate: 2,
+      delivery: { ...DEFAULT_PRICING_CONFIG.delivery, CAR: { baseFee: 10.5, includedKm: 2, perKm: 60 } },
+      serviceFeeTiers: [
+        { below: 5000, fee: 50 },
+        { below: 1000, fee: 30 },
+        { below: 9000, fee: 100 },
+      ],
+    };
+    expect(validatePricingConfig(broken)).toEqual([
+      'commissionRate must be between 0 and 1',
+      'delivery.CAR needs whole-shilling baseFee and perKm, and includedKm between 0 and 100',
+      'serviceFeeTiers must go from lowest to highest',
+      'serviceFeeTiers[2].below must be null (no upper limit)',
+    ]);
+    expect(validatePricingConfig(null)).toEqual(['Pricing must be an object']);
   });
 });

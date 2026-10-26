@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { ACTIVE_ORDER_STATUSES } from '@errandconnect/shared';
 import { DocumentType, Prisma } from '../generated/prisma/client.js';
 import { OrdersService } from '../orders/orders.service.js';
+import { InboxService } from '../notifications/inbox.service.js';
 import type { AuthUser } from '../common/auth-user.js';
 import { AuditService } from '../common/audit.service.js';
 import { TokensService } from '../auth/tokens.service.js';
@@ -54,6 +55,7 @@ export class AdminService {
     private readonly users: UsersService,
     private readonly tokens: TokensService,
     private readonly orders: OrdersService,
+    private readonly inbox: InboxService,
   ) {}
 
   // ─── Runners ───
@@ -167,6 +169,11 @@ export class AdminService {
       await tx.wallet.upsert({ where: { type_userId: { type: 'RUNNER', userId } }, update: {}, create: { type: 'RUNNER', userId } });
       await this.audit.log({ actorId: admin.id, action: 'runner.approve', entityType: 'runner', entityId: userId }, tx);
     });
+    await this.inbox.notify([userId], {
+      title: 'You are approved! 🎉',
+      body: 'Your runner account is ready. Go online to start receiving errands.',
+      link: '/',
+    });
     return this.getRunner(userId);
   }
 
@@ -181,6 +188,11 @@ export class AdminService {
         { actorId: admin.id, action: 'runner.reject', entityType: 'runner', entityId: userId, metadata: { reason } },
         tx,
       );
+    });
+    await this.inbox.notify([userId], {
+      title: 'Your runner application needs changes',
+      body: reason,
+      link: '/runner/onboarding',
     });
     return this.getRunner(userId);
   }

@@ -30,6 +30,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { RealtimeService } from '../realtime/realtime.service.js';
 import { DispatchService, jobStart } from '../realtime/dispatch.service.js';
 import { PaymentsService } from '../payments/payments.service.js';
+import { recalculateRunnerRating } from './ratings.js';
 import type { CreateOrderDto, LocationDto, OrderDetailsDto, ReviewDto } from './orders.dto.js';
 
 const MAX_ACTIVE_ORDERS_PER_CUSTOMER = 5;
@@ -574,18 +575,7 @@ export class OrdersService {
     try {
       await this.prisma.$transaction(async (tx) => {
         await tx.review.create({ data: { orderId, authorId: userId, subjectId, stars: dto.stars, comment: dto.comment } });
-        if (ratingRunner) {
-          // Only reviews about this person *as a runner* count towards their runner rating.
-          const stats = await tx.review.aggregate({
-            where: { subjectId, isHidden: false, order: { runnerId: subjectId } },
-            _avg: { stars: true },
-            _count: true,
-          });
-          await tx.runnerProfile.update({
-            where: { userId: subjectId },
-            data: { ratingAvg: Math.round((stats._avg.stars ?? 0) * 100) / 100, ratingCount: stats._count },
-          });
-        }
+        if (ratingRunner) await recalculateRunnerRating(tx, subjectId);
       });
     } catch (error) {
       if ((error as { code?: string }).code === 'P2002') throw new ConflictException('You already rated this errand');

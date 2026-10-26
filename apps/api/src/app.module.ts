@@ -10,12 +10,14 @@ import { AuthGuard } from './common/auth.guard.js';
 import { HttpThrottlerGuard } from './common/http-throttler.guard.js';
 import { DocumentsModule } from './documents/documents.module.js';
 import { HealthController } from './health/health.controller.js';
+import { InboxModule } from './notifications/inbox.service.js';
 import { MessagingModule } from './notifications/messaging.service.js';
 import { OrdersModule } from './orders/orders.module.js';
 import { PricingModule } from './pricing/pricing.module.js';
 import { RealtimeServiceModule } from './realtime/realtime.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { RunnersModule } from './runners/runners.module.js';
+import { SupportModule } from './support/support.module.js';
 
 @Module({
   imports: [
@@ -33,10 +35,12 @@ import { RunnersModule } from './runners/runners.module.js';
     RealtimeServiceModule,
     PricingModule,
     MessagingModule,
+    InboxModule,
     AuthModule,
     DocumentsModule,
     RunnersModule,
     OrdersModule,
+    SupportModule,
     AdminModule,
   ],
   controllers: [HealthController, CategoriesController],

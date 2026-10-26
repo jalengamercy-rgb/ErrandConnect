@@ -93,6 +93,12 @@ model User {
   reviewsGiven      Review[]           @relation("ReviewAuthor")
   reviewsReceived   Review[]           @relation("ReviewSubject")
   auditLogs         AuditLog[]
+  disputesRaised    Dispute[]          @relation("DisputeRaisedBy")
+  disputesResolved  Dispute[]          @relation("DisputeResolvedBy")
+  tickets           SupportTicket[]    @relation("TicketOwner")
+  ticketsAssigned   SupportTicket[]    @relation("TicketAssignee")
+  ticketMessages    TicketMessage[]
+  notifications     Notification[]
 
   @@map("users")
 }
@@ -729,6 +735,8 @@ model Order {
   reviews            Review[]
   ledgerTransactions LedgerTransaction[]
   messages           OrderMessage[]
+  disputes           Dispute[]
+  tickets            SupportTicket[]
 
   @@index([customerId, createdAt])
   @@index([runnerId, createdAt])
@@ -962,4 +970,123 @@ model Withdrawal {
 
   @@index([status])
   @@map("withdrawals")
+}
+
+// ───────────────────────────── Support ─────────────────────────────
+
+enum DisputeType {
+  ITEM_MISSING
+  WRONG_ITEM
+  DAMAGED
+  NOT_DELIVERED
+  OVERCHARGED
+  RUNNER_BEHAVIOUR
+  CUSTOMER_BEHAVIOUR
+  OTHER
+}
+
+enum DisputeStatus {
+  OPEN
+  RESOLVED
+}
+
+enum DisputeOutcome {
+  /// Customer gets money back (full escrow, or a credit if already paid out).
+  REFUND_CUSTOMER
+  /// Runner is paid as normal.
+  PAY_RUNNER
+  /// Nothing changes; the order continues where it was.
+  NO_ACTION
+}
+
+/// A problem reported on an order. While open, the order is DISPUTED and its escrow is ON_HOLD.
+model Dispute {
+  id                  String          @id @default(uuid())
+  orderId             String          @map("order_id")
+  order               Order           @relation(fields: [orderId], references: [id])
+  raisedById          String          @map("raised_by_id")
+  raisedBy            User            @relation("DisputeRaisedBy", fields: [raisedById], references: [id])
+  type                DisputeType
+  description         String
+  status              DisputeStatus   @default(OPEN)
+  /// Order status before the dispute, restored if no action is taken.
+  previousOrderStatus OrderStatus     @map("previous_order_status")
+  outcome             DisputeOutcome?
+  refundAmount        Int?            @map("refund_amount")
+  resolution          String?
+  resolvedById        String?         @map("resolved_by_id")
+  resolvedBy          User?           @relation("DisputeResolvedBy", fields: [resolvedById], references: [id])
+  resolvedAt          DateTime?       @map("resolved_at")
+  createdAt           DateTime        @default(now()) @map("created_at")
+
+  @@index([status, createdAt])
+  @@index([orderId])
+  @@map("disputes")
+}
+
+enum TicketStatus {
+  OPEN
+  /// Waiting for the user to reply.
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model SupportTicket {
+  id           String         @id @default(uuid())
+  number       String         @unique
+  userId       String         @map("user_id")
+  user         User           @relation("TicketOwner", fields: [userId], references: [id])
+  orderId      String?        @map("order_id")
+  order        Order?         @relation(fields: [orderId], references: [id])
+  subject      String
+  status       TicketStatus   @default(OPEN)
+  priority     TicketPriority @default(NORMAL)
+  assignedToId String?        @map("assigned_to_id")
+  assignedTo   User?          @relation("TicketAssignee", fields: [assignedToId], references: [id])
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  messages TicketMessage[]
+
+  @@index([status, priority])
+  @@index([userId])
+  @@map("support_tickets")
+}
+
+model TicketMessage {
+  id        String        @id @default(uuid())
+  ticketId  String        @map("ticket_id")
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId  String        @map("author_id")
+  author    User          @relation(fields: [authorId], references: [id])
+  body      String
+  fromStaff Boolean       @default(false) @map("from_staff")
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_messages")
+}
+
+/// In-app inbox messages (also delivered live over the socket).
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  /// App route to open, e.g. /orders/123
+  link      String?
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@map("notifications")
 }
