@@ -13,6 +13,7 @@ interface InvoiceRow {
   number: string;
   amount: number;
   status: string;
+  kind: 'ORDERS' | 'COMMISSION' | 'FEATURED_LISTING';
   dueDate: string;
   periodStart: string;
   periodEnd: string;
@@ -111,6 +112,7 @@ export default function InvoicesPage() {
         columns={[
           { header: 'Invoice', cell: (i) => <span className="font-medium">{i.number}</span> },
           { header: 'Billed to', cell: (i) => (i.business ? `${i.business.name} (company)` : `${i.merchant?.name} (shop)`) },
+          { header: 'For', cell: (i) => ({ ORDERS: 'Errands', COMMISSION: 'Commission', FEATURED_LISTING: 'Featured listing' })[i.kind] },
           { header: 'Period', cell: (i) => `${date(i.periodStart)} – ${date(new Date(new Date(i.periodEnd).getTime() - 1))}` },
           { header: 'Amount', cell: (i) => kes(i.amount) },
           { header: 'Status', cell: (i) => <Badge status={i.status} /> },

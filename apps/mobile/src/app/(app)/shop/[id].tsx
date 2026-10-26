@@ -1,5 +1,5 @@
-import { ORDER_STATUS_LABELS } from '@errandconnect/shared';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { normalizeKenyanPhone, ORDER_STATUS_LABELS } from '@errandconnect/shared';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Linking } from 'react-native';
@@ -9,7 +9,9 @@ import { Button } from '@/components/ui/button';
 import { ChoiceChips } from '@/components/ui/choice-chips';
 import { Card, Loading, Notice } from '@/components/ui/feedback';
 import { Screen } from '@/components/ui/screen';
+import { TextField } from '@/components/ui/text-field';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 import { ORG_STATUS_LABELS, useShopDashboard, useShopOrders, type ShopOrder } from '@/lib/business';
 import { formatKes } from '@/lib/orders';
 
@@ -33,6 +35,7 @@ export default function ShopDashboardScreen() {
         {shop.commissionOwed > 0 && <ThemedText type="small">Commission to be invoiced: {formatKes(shop.commissionOwed)}</ThemedText>}
       </Card>
       {shop.status === 'PENDING' && <Notice>We&apos;re reviewing your shop. It appears in the app once approved.</Notice>}
+      {shop.status === 'ACTIVE' && <GetFeatured shopId={id} />}
       <ChoiceChips
         choices={[
           { value: 'ACTIVE', label: `Open orders (${shop.openOrders})` },
@@ -47,6 +50,77 @@ export default function ShopDashboardScreen() {
         <ShopOrderCard key={o.id} shopId={id} order={o} />
       ))}
     </Screen>
+  );
+}
+
+interface FeaturedOffer {
+  weeklyPrice: number;
+  featuredUntil: string | null;
+  openInvoice: { id: string; number: string; amount: number; featuredWeeks: number } | null;
+}
+
+/** Pay to appear at the top of the shop directory. */
+function GetFeatured({ shopId }: { shopId: string }) {
+  const { me } = useAuth();
+  const queryClient = useQueryClient();
+  const key = ['merchants', shopId, 'featured'];
+  const { data: offer } = useQuery({
+    queryKey: key,
+    queryFn: () => api.get<FeaturedOffer>(`/merchants/${shopId}/featured`),
+    // While an invoice is open, check for the payment so the screen updates by itself.
+    refetchInterval: (query) => (query.state.data?.openInvoice ? 5_000 : false),
+  });
+  const [weeks, setWeeks] = useState(1);
+  const [phone, setPhone] = useState(me?.phone ? `0${me.phone.slice(4)}` : '');
+  const buy = useMutation({
+    mutationFn: () => api.post<{ payment: { message: string } | null }>(`/merchants/${shopId}/featured`, { weeks, phone }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: key }),
+  });
+  const pay = useMutation({
+    mutationFn: (invoiceId: string) => api.post<{ message: string }>(`/invoices/${invoiceId}/pay`, { phone }),
+  });
+  if (!offer) return null;
+  const until = offer.featuredUntil && new Date(offer.featuredUntil) > new Date() ? new Date(offer.featuredUntil) : null;
+
+  return (
+    <Card>
+      <ThemedText type="smallBold">⭐ Get featured</ThemedText>
+      <ThemedText type="small">Appear at the top of the shop list for customers nearby. {formatKes(offer.weeklyPrice)} a week.</ThemedText>
+      {until && <Notice tone="success">Featured until {until.toLocaleDateString('en-KE', { day: 'numeric', month: 'long' })}.</Notice>}
+      <TextField label="M-Pesa number" keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
+      {buy.data?.payment && offer.openInvoice && <Notice tone="success">{buy.data.payment.message}</Notice>}
+      {offer.openInvoice ? (
+        <>
+          <Notice>
+            Invoice {offer.openInvoice.number} for {offer.openInvoice.featuredWeeks} week{offer.openInvoice.featuredWeeks === 1 ? '' : 's'}{' '}
+            ({formatKes(offer.openInvoice.amount)}) is waiting for payment. Your placement starts once it&apos;s paid.
+          </Notice>
+          {pay.isSuccess && <Notice tone="success">{pay.data.message}</Notice>}
+          {pay.error && <Notice tone="error">{pay.error.message}</Notice>}
+          <Button
+            title="Pay with M-Pesa"
+            disabled={!normalizeKenyanPhone(phone)}
+            loading={pay.isPending}
+            onPress={() => pay.mutate(offer.openInvoice!.id)}
+          />
+        </>
+      ) : (
+        <>
+          <ChoiceChips
+            choices={[1, 2, 4].map((w) => ({ value: w, label: `${w} week${w === 1 ? '' : 's'} · ${formatKes(w * offer.weeklyPrice)}` }))}
+            value={weeks}
+            onChange={setWeeks}
+          />
+          {buy.error && <Notice tone="error">{buy.error.message}</Notice>}
+          <Button
+            title={until ? `Extend by ${weeks} week${weeks === 1 ? '' : 's'}` : `Feature my shop`}
+            disabled={!normalizeKenyanPhone(phone)}
+            loading={buy.isPending}
+            onPress={() => buy.mutate()}
+          />
+        </>
+      )}
+    </Card>
   );
 }
 

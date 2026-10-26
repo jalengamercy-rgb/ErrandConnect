@@ -61,6 +61,7 @@ export default function NewErrandScreen() {
   const [forSomeoneElse, setForSomeoneElse] = useState(false);
   const [recipientName, setRecipientName] = useState('');
   const [recipientPhone, setRecipientPhone] = useState('');
+  const [promoCode, setPromoCode] = useState('');
   const { me } = useAuth();
   const { data: wallets } = useWallets();
   const walletBalance = wallets?.find((w) => w.type === 'CUSTOMER')?.balance ?? 0;
@@ -93,11 +94,16 @@ export default function NewErrandScreen() {
     itemsCost: itemsCost ? Number.parseInt(itemsCost, 10) : 0,
     merchantId: shop?.id,
     businessId: billTo || undefined,
+    promoCode: !billTo && promoCode.trim() ? promoCode.trim().toUpperCase() : undefined,
   });
   const canQuote = !!details.categorySlug && !!details.dropoffAddressId && (!!shop || !hasPickup || !!details.pickup);
   const quote = useQuery({
     queryKey: ['quote', details],
-    queryFn: () => api.post<{ quote: Quote; distanceKm: number }>('/orders/quote', details),
+    queryFn: () =>
+      api.post<{ quote: Quote; distanceKm: number; plus: boolean; promo: { code: string; discount: number; error?: string } | null }>(
+        '/orders/quote',
+        details,
+      ),
     enabled: canQuote,
   });
 
@@ -130,7 +136,8 @@ export default function NewErrandScreen() {
     },
   });
 
-  const ready = canQuote && quote.isSuccess && description.trim().length >= 5 && recipientOk && paymentOk;
+  const promoError = quote.data?.promo?.error;
+  const ready = canQuote && quote.isSuccess && !promoError && description.trim().length >= 5 && recipientOk && paymentOk;
   const payLabel = needsApproval
     ? 'Send for approval'
     : { MPESA: 'Pay with M-Pesa', WALLET: 'Pay from wallet', CASH: 'Post errand', BUSINESS_INVOICE: 'Bill to company' }[paymentMethod];
@@ -232,7 +239,24 @@ export default function NewErrandScreen() {
       />
       <ChoiceChips label="How urgent?" choices={URGENCY_CHOICES} value={urgency} onChange={setUrgency} />
 
+      {!billTo && (
+        <TextField
+          label="Promo code"
+          optional
+          autoCapitalize="characters"
+          value={promoCode}
+          onChangeText={(t) => setPromoCode(t.replace(/[^a-zA-Z0-9]/g, '').toUpperCase())}
+          error={promoError}
+          hint={quote.data?.promo && !promoError ? `🎉 ${formatKes(quote.data.promo.discount)} off` : undefined}
+        />
+      )}
       {quote.data && <PriceBreakdown quote={quote.data.quote.customer} distanceKm={quote.data.distanceKm} />}
+      {quote.data?.plus && <Notice tone="success">⭐ Plus member: no service fee.</Notice>}
+      {!!quote.data?.quote.customer.surgeFee && (
+        <Notice tone="warning">
+          It&apos;s busy nearby, so delivery costs a bit more right now. Most of the extra goes to your runner.
+        </Notice>
+      )}
       {quote.error && <Notice tone="error">{quote.error.message}</Notice>}
       <ChoiceChips
         label="How will you pay?"

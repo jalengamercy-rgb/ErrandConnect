@@ -16,12 +16,14 @@ export function PriceBreakdown({ quote, distanceKm }: { quote: Quote['customer']
     ['Errand fee', quote.errandFee],
     [distanceKm ? `Delivery (${distanceKm} km)` : 'Delivery', quote.deliveryFee],
     ['Urgent delivery', quote.urgencyFee],
+    ['Busy-time charge', quote.surgeFee ?? 0],
     ['Service fee', quote.serviceFee],
+    ['Promo discount', -(quote.discount ?? 0)],
   ];
   return (
     <Card>
       {rows
-        .filter(([, amount]) => amount > 0)
+        .filter(([, amount]) => amount !== 0)
         .map(([label, amount]) => (
           <View key={label} style={styles.row}>
             <ThemedText type="small">{label}</ThemedText>

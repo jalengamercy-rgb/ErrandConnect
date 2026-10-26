@@ -4,21 +4,28 @@
 
 Every movement is a balanced double-entry booking (`ledger_transactions` / `ledger_entries`); the sum of all wallet balances is always zero (checked after every payments test).
 
-| Event | Booking |
-|---|---|
-| Customer pays with M-Pesa | `EXTERNAL_CLEARING` → `ESCROW` |
-| Customer pays from wallet | customer wallet → `ESCROW` |
-| Delivery PIN confirmed | `ESCROW` → runner wallet (`runnerEarnings`) + `PLATFORM_REVENUE` (`platformFee`) |
-| Cancelled after paying | `ESCROW` → customer wallet (full refund) |
-| Paid after cancelling, or paid too little | `ESCROW` → customer wallet |
-| Cash errand completed | runner wallet → `PLATFORM_REVENUE` (fee the runner owes; wallet may go negative) |
-| Company errand (invoice) posted or approved | company wallet → `ESCROW` (the company wallet may go down to minus its credit limit) |
-| Company errand cancelled | `ESCROW` → company wallet |
-| Shop order completed | shop wallet → `PLATFORM_REVENUE` (commission on the items cost; the wallet goes negative until invoiced) |
-| Invoice paid (M-Pesa or marked paid) | `EXTERNAL_CLEARING` → company or shop wallet |
-| Withdrawal requested | user wallet → `PAYOUT_PENDING` |
-| Withdrawal paid | `PAYOUT_PENDING` → `EXTERNAL_CLEARING` |
-| Withdrawal failed / rejected | `PAYOUT_PENDING` → user wallet |
+| Event                                       | Booking                                                                                                  |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Customer pays with M-Pesa                   | `EXTERNAL_CLEARING` → `ESCROW`                                                                           |
+| Customer pays from wallet                   | customer wallet → `ESCROW`                                                                               |
+| Delivery PIN confirmed                      | `ESCROW` → runner wallet (`runnerEarnings`) + `PLATFORM_REVENUE` (`platformFee`)                         |
+| Cancelled after paying                      | `ESCROW` → customer wallet (full refund)                                                                 |
+| Paid after cancelling, or paid too little   | `ESCROW` → customer wallet                                                                               |
+| Cash errand completed                       | runner wallet → `PLATFORM_REVENUE` (fee the runner owes; wallet may go negative)                         |
+| Company errand (invoice) posted or approved | company wallet → `ESCROW` (the company wallet may go down to minus its credit limit)                     |
+| Company errand cancelled                    | `ESCROW` → company wallet                                                                                |
+| Shop order completed                        | shop wallet → `PLATFORM_REVENUE` (commission on the items cost; the wallet goes negative until invoiced) |
+| Invoice paid (M-Pesa or marked paid)        | `EXTERNAL_CLEARING` → company or shop wallet                                                             |
+| Promo discount                              | nothing extra: the order total is lower and the platform's share on release is lower by the same amount  |
+| Plus by wallet / renewal                    | customer wallet → `PLATFORM_REVENUE` (`SUBSCRIPTION`)                                                    |
+| Plus by M-Pesa                              | `EXTERNAL_CLEARING` → `PLATFORM_REVENUE` (a short payment goes to the customer wallet instead)           |
+| Referral reward, loyalty redemption         | `PLATFORM_REVENUE` → customer wallet (`REFERRAL_REWARD`, `LOYALTY_REDEMPTION`)                           |
+| Featured listing bought                     | shop wallet → `PLATFORM_REVENUE` (`FEATURED_LISTING`); paid through its invoice; voiding reverses it     |
+| Ad payment recorded                         | `EXTERNAL_CLEARING` → `PLATFORM_REVENUE` (`ADVERTISING`)                                                 |
+| Dispute goodwill credit                     | `PLATFORM_REVENUE` → customer wallet (`BONUS`)                                                           |
+| Withdrawal requested                        | user wallet → `PAYOUT_PENDING`                                                                           |
+| Withdrawal paid                             | `PAYOUT_PENDING` → `EXTERNAL_CLEARING`                                                                   |
+| Withdrawal failed / rejected                | `PAYOUT_PENDING` → user wallet                                                                           |
 
 `EXTERNAL_CLEARING` mirrors the M-Pesa account: its balance is the negative of the money M-Pesa holds for the business.
 
@@ -35,6 +42,7 @@ Every movement is a balanced double-entry booking (`ledger_transactions` / `ledg
 `MPESA_MODE=fake` (default outside production) simulates M-Pesa: payments and payouts confirm automatically after 3 seconds. No real money moves.
 
 To use Safaricom:
+
 1. Create an app on the [Daraja portal](https://developer.safaricom.co.ke) and enable **Lipa na M-Pesa Online** and **B2C**.
 2. Set in `apps/api/.env`: `MPESA_MODE=daraja`, `MPESA_ENV=sandbox`, `MPESA_CONSUMER_KEY`, `MPESA_CONSUMER_SECRET`, `MPESA_SHORTCODE`, `MPESA_PASSKEY`, `MPESA_CALLBACK_BASE_URL` (a public HTTPS URL of the API — for local testing use a tunnel such as ngrok), `MPESA_CALLBACK_SECRET` (random), and for withdrawals `MPESA_B2C_SHORTCODE`, `MPESA_INITIATOR_NAME`, `MPESA_SECURITY_CREDENTIAL`.
 3. Test in the sandbox, then switch `MPESA_ENV=production` with go-live credentials.

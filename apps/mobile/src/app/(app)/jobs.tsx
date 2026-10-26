@@ -65,6 +65,7 @@ function JobCard({ job, disabled }: { job: Job; disabled: boolean }) {
     <Card>
       <ThemedText type="smallBold">
         {job.category} · earn {formatKes(job.runnerFee)}
+        {job.surgeBonus > 0 ? ` (incl. ${formatKes(job.surgeBonus)} busy-time bonus)` : ''}
       </ThemedText>
       <ThemedText type="small">{job.description}</ThemedText>
       <ThemedText type="small" themeColor="textSecondary">

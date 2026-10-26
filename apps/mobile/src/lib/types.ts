@@ -159,10 +159,21 @@ export interface Onboarding {
 export type { OrderStatus, Urgency } from '@errandconnect/shared';
 
 export interface Quote {
-  customer: { itemsCost: number; errandFee: number; deliveryFee: number; urgencyFee: number; serviceFee: number; total: number };
+  customer: {
+    itemsCost: number;
+    errandFee: number;
+    deliveryFee: number;
+    urgencyFee: number;
+    serviceFee: number;
+    /** Older quotes have no surge or discount. */
+    surgeFee?: number;
+    discount?: number;
+    total: number;
+  };
   runner: { itemsReimbursement: number; errandEarnings: number; deliveryEarnings: number; urgencyEarnings: number; total: number };
   platform: { total: number };
   extraKm: number;
+  surgeMultiplier?: number;
 }
 
 export interface OrderSummary {
@@ -203,6 +214,8 @@ export interface Order {
   deliveryFee: number;
   urgencyFee: number;
   serviceFee: number;
+  surgeFee: number;
+  discount: number;
   total: number;
   runnerEarnings: number;
   /** What the runner keeps (earnings minus paying back the items). */
@@ -291,6 +304,8 @@ export interface Job {
   itemsCost: number;
   runnerEarnings: number;
   runnerFee: number;
+  /** Extra earned because demand is high in the area. */
+  surgeBonus: number;
   createdAt: string;
 }
 

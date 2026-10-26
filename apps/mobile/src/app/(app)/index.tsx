@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useEffect } from 'react';
+import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { api } from '@/lib/api';
 import { ME_QUERY_KEY, useAuth } from '@/lib/auth-context';
 import { getCurrentLocation } from '@/lib/device';
+import { useBanners, type Banner } from '@/lib/growth';
 import { useCategories, useOnboarding } from '@/lib/queries';
 import { useNotifications } from '@/lib/support';
 import { OrderRow } from '@/features/orders/components';
@@ -23,6 +25,7 @@ export default function HomeScreen() {
 
   return (
     <Screen title={`Hi, ${me.firstName}`}>
+      <BannerStrip />
       {me.runnerProfile && runnerStatus !== 'APPROVED' && <RunnerApplicationCard />}
       {runnerStatus === 'APPROVED' && <OnlineToggle online={me.runnerProfile!.isOnline} />}
       {me.customerProfile && <CustomerHome />}
@@ -151,13 +154,50 @@ function CustomerHome() {
         ))}
       </View>
       <Button title="Order from a shop" variant="secondary" onPress={() => router.push('/shops')} />
+      <Button title="⭐ Rewards & invite friends" variant="secondary" onPress={() => router.push('/rewards')} />
+      <Button title="ErrandCONNECT Plus" variant="secondary" onPress={() => router.push('/plus')} />
       <Button title="My errands" variant="secondary" onPress={() => router.push('/orders')} />
       <Button title="Saved addresses" variant="secondary" onPress={() => router.push('/addresses')} />
     </>
   );
 }
 
+/** Promotions and ads from the admin panel. */
+function BannerStrip() {
+  const theme = useTheme();
+  const { data: banners } = useBanners();
+  const ids = banners?.map((b) => b.id).join(',') ?? '';
+  useEffect(() => {
+    // Count each banner as seen once per visit to the home screen.
+    for (const id of ids.split(',').filter(Boolean)) void api.post(`/banners/${id}/events`, { event: 'impression' }).catch(() => undefined);
+  }, [ids]);
+
+  const open = (b: Banner) => {
+    void api.post(`/banners/${b.id}/events`, { event: 'click' }).catch(() => undefined);
+    if (b.merchantId) router.push({ pathname: '/orders/new', params: { merchant: b.merchantId } });
+    else if (b.categorySlug) router.push({ pathname: '/orders/new', params: { category: b.categorySlug } });
+    else if (b.url) void Linking.openURL(b.url);
+  };
+  if (!banners?.length) return null;
+  return (
+    <>
+      {banners.map((b) => (
+        <Pressable
+          key={b.id}
+          accessibilityRole="button"
+          onPress={() => open(b)}
+          style={({ pressed }) => [styles.banner, { backgroundColor: theme.backgroundSelected, opacity: pressed ? 0.8 : 1 }]}
+        >
+          <ThemedText type="smallBold">{b.title}</ThemedText>
+          {b.body && <ThemedText type="small">{b.body}</ThemedText>}
+        </Pressable>
+      ))}
+    </>
+  );
+}
+
 const styles = StyleSheet.create({
+  banner: { borderRadius: Radius.medium, padding: Spacing.three, gap: Spacing.one },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   tile: { width: '48%', flexGrow: 1, minHeight: 64, borderRadius: Radius.medium, padding: Spacing.three, justifyContent: 'center' },
 });

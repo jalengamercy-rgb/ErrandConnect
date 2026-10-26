@@ -64,6 +64,7 @@ export default function ReportsPage() {
           {totals.orders ? Math.round((totals.completed / totals.orders) * 100) : 0}%)
         </p>
       )}
+      {can('FINANCE_MANAGER', 'OPERATIONS_MANAGER') && <RevenueStreams days={Number(days)} />}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Platform revenue per day">
           {daily.data && <BarChart data={daily.data.map((d) => ({ label: d.date, value: d.revenue }))} format={kes} />}
@@ -149,5 +150,56 @@ function CsvExport() {
       </div>
       <ErrorBox error={error} />
     </Card>
+  );
+}
+
+interface Revenue {
+  completedOrders: number;
+  streams: { key: string; label: string; amount: number }[];
+  costs: { key: string; label: string; amount: number }[];
+  net: number;
+  plusMembers: number;
+  promoUses: number;
+}
+
+/** Where the money came from, and what promotions cost, in the period. */
+function RevenueStreams({ days }: { days: number }) {
+  const from = `${daysAgo(days)}T00:00:00`;
+  const to = `${daysAgo(-1)}T00:00:00`;
+  const { data, error } = useQuery({
+    queryKey: ['reports', 'revenue', days],
+    queryFn: () => api.get<Revenue>(`/admin/reports/revenue?from=${new Date(from).toISOString()}&to=${new Date(to).toISOString()}`),
+  });
+  if (error) return <ErrorBox error={error} />;
+  if (!data) return null;
+  const earned = data.streams.reduce((t, s) => t + s.amount, 0);
+  const spent = data.costs.reduce((t, c) => t + c.amount, 0);
+  return (
+    <div className="mb-4 grid gap-4 lg:grid-cols-2">
+      <Card title="Revenue by stream">
+        <Table
+          rows={[...data.streams.filter((s) => s.amount !== 0), { key: 'total', label: 'Total', amount: earned }]}
+          columns={[
+            { header: 'Stream', cell: (s) => (s.key === 'total' ? <b>{s.label}</b> : s.label) },
+            { header: 'Amount', cell: (s) => (s.key === 'total' ? <b>{kes(s.amount)}</b> : kes(s.amount)) },
+            { header: 'Share', cell: (s) => (earned && s.key !== 'total' ? `${Math.round((s.amount / earned) * 100)}%` : '') },
+          ]}
+          empty="No revenue in this period."
+        />
+      </Card>
+      <Card title="Promotion costs">
+        <Table
+          rows={[...data.costs, { key: 'total', label: 'Total', amount: spent }]}
+          columns={[
+            { header: 'Cost', cell: (c) => (c.key === 'total' ? <b>{c.label}</b> : c.label) },
+            { header: 'Amount', cell: (c) => (c.key === 'total' ? <b>{kes(c.amount)}</b> : kes(c.amount)) },
+          ]}
+        />
+        <p className="mt-3 text-sm text-muted">
+          Net revenue {kes(data.net)} from {data.completedOrders} completed errands · {data.promoUses} promo code uses · {data.plusMembers}{' '}
+          Plus members now
+        </p>
+      </Card>
+    </div>
   );
 }

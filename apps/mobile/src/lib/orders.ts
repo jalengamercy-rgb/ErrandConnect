@@ -51,7 +51,7 @@ export const useWithdrawals = () =>
   useQuery({ queryKey: orderKeys.withdrawals, queryFn: () => api.get<Withdrawal[]>('/wallets/withdrawals') });
 
 export function formatKes(amount: number) {
-  return `KES ${amount.toLocaleString('en-KE')}`;
+  return `${amount < 0 ? '−' : ''}KES ${Math.abs(amount).toLocaleString('en-KE')}`;
 }
 
 /** Opens Google Maps with directions to a point (works on Android, iOS and web). */

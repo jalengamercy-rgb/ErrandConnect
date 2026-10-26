@@ -23,6 +23,8 @@ interface Invoice {
   number: string;
   amount: number;
   status: string;
+  kind: 'ORDERS' | 'COMMISSION' | 'FEATURED_LISTING';
+  featuredWeeks: number | null;
   periodStart: string;
   periodEnd: string;
   dueDate: string;
@@ -62,23 +64,39 @@ export default function InvoicePage() {
       <ErrorBox error={markPaid.error ?? voidIt.error} />
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
-          <Card title={isCompany ? `Errands (${lines.length})` : `Commission on shop orders (${lines.length})`}>
-            <Table
-              rows={lines}
-              columns={[
-                {
-                  header: 'Order',
-                  cell: (o) => (
-                    <Link className="text-brand hover:underline" href={`/orders/${o.id}`}>
-                      {o.orderNumber}
-                    </Link>
-                  ),
-                },
-                { header: 'Description', cell: (o) => <span className="line-clamp-1">{o.description}</span> },
-                { header: 'Completed', cell: (o) => date(o.completedAt) },
-                { header: isCompany ? 'Total' : 'Commission', cell: (o) => kes(isCompany ? o.total : o.merchantCommission) },
-              ]}
-            />
+          <Card
+            title={
+              inv.kind === 'FEATURED_LISTING'
+                ? 'Featured listing'
+                : isCompany
+                  ? `Errands (${lines.length})`
+                  : `Commission on shop orders (${lines.length})`
+            }
+          >
+            {inv.kind === 'FEATURED_LISTING' && (
+              <p className="text-sm">
+                {inv.featuredWeeks} week{inv.featuredWeeks === 1 ? '' : 's'} at the top of the shop directory. Starts when this invoice is
+                paid.
+              </p>
+            )}
+            {inv.kind !== 'FEATURED_LISTING' && (
+              <Table
+                rows={lines}
+                columns={[
+                  {
+                    header: 'Order',
+                    cell: (o) => (
+                      <Link className="text-brand hover:underline" href={`/orders/${o.id}`}>
+                        {o.orderNumber}
+                      </Link>
+                    ),
+                  },
+                  { header: 'Description', cell: (o) => <span className="line-clamp-1">{o.description}</span> },
+                  { header: 'Completed', cell: (o) => date(o.completedAt) },
+                  { header: isCompany ? 'Total' : 'Commission', cell: (o) => kes(isCompany ? o.total : o.merchantCommission) },
+                ]}
+              />
+            )}
             <div className="mt-3 text-right font-semibold">Amount due: {kes(inv.amount)}</div>
           </Card>
           <Card title="Payments">

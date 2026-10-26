@@ -23,6 +23,8 @@ const NAV: { href: string; label: string; roles: StaffRole[] }[] = [
   { href: '/reviews', label: 'Reviews', roles: ['OPERATIONS_MANAGER', 'CUSTOMER_SUPPORT', 'RUNNER_MANAGER'] },
   { href: '/reports', label: 'Reports', roles: ['OPERATIONS_MANAGER', 'FINANCE_MANAGER', 'MARKETING_MANAGER'] },
   { href: '/announcements', label: 'Announcements', roles: ['OPERATIONS_MANAGER', 'MARKETING_MANAGER'] },
+  { href: '/promotions', label: 'Promotions', roles: ['MARKETING_MANAGER', 'FINANCE_MANAGER'] },
+  { href: '/rewards', label: 'Rewards & Plus', roles: ['MARKETING_MANAGER', 'FINANCE_MANAGER', 'OPERATIONS_MANAGER'] },
   { href: '/settings', label: 'Pricing & categories', roles: ['FINANCE_MANAGER', 'OPERATIONS_MANAGER'] },
   { href: '/staff', label: 'Staff', roles: ['SUPER_ADMIN'] },
   { href: '/audit-logs', label: 'Activity log', roles: ['SUPER_ADMIN'] },

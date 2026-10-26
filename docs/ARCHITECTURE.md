@@ -7,13 +7,13 @@
                                        └─ M-Pesa Daraja, Google Maps, Africa's Talking
 ```
 
-| Part | Technology | Why |
-|---|---|---|
-| Mobile apps | React Native (Expo) | One codebase for Android and iOS |
-| Admin panel | Next.js | Fast web dashboard, shares TypeScript types |
-| API | NestJS 12 (ES modules) | Structured modules, dependency injection, validation |
-| Database | PostgreSQL 16 + Prisma 7 | Reliable transactions for money; typed queries |
-| Real-time | Socket.IO + Redis | Live tracking, job offers, chat |
+| Part        | Technology               | Why                                                  |
+| ----------- | ------------------------ | ---------------------------------------------------- |
+| Mobile apps | React Native (Expo)      | One codebase for Android and iOS                     |
+| Admin panel | Next.js                  | Fast web dashboard, shares TypeScript types          |
+| API         | NestJS 12 (ES modules)   | Structured modules, dependency injection, validation |
+| Database    | PostgreSQL 16 + Prisma 7 | Reliable transactions for money; typed queries       |
+| Real-time   | Socket.IO + Redis        | Live tracking, job offers, chat                      |
 
 ## Key decisions
 

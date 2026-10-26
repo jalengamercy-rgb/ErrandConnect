@@ -189,6 +189,62 @@ function PricingEditor({ initial }: { initial: PricingConfig }) {
             ]}
           />
         </Card>
+        <Card title="Surge pricing">
+          <p className="mb-3 text-sm text-muted">
+            When there are more open errands than online runners nearby, the delivery fee goes up (most of the extra goes to the runner, to
+            bring more runners online). Use the minimum for events like heavy rain.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="flex items-center gap-2 text-sm sm:col-span-2">
+              <input
+                type="checkbox"
+                disabled={!editable}
+                checked={config.surge.enabled}
+                onChange={(e) => update((c) => (c.surge.enabled = e.target.checked))}
+              />
+              Surge pricing on
+            </label>
+            <label className="text-sm">
+              Highest multiplier (×)
+              <Input
+                type="number"
+                step="0.1"
+                disabled={!editable}
+                value={config.surge.maxMultiplier}
+                onChange={(e) => update((c) => (c.surge.maxMultiplier = num(e.target.value)))}
+              />
+            </label>
+            <label className="text-sm">
+              Minimum multiplier right now (×, 1 = none)
+              <Input
+                type="number"
+                step="0.1"
+                disabled={!editable}
+                value={config.surge.manualMultiplier}
+                onChange={(e) => update((c) => (c.surge.manualMultiplier = num(e.target.value)))}
+              />
+            </label>
+            <label className="text-sm">
+              Runner share of surge fee (%)
+              <Input
+                type="number"
+                disabled={!editable}
+                value={pct(config.surge.runnerShare)}
+                onChange={(e) => update((c) => (c.surge.runnerShare = num(e.target.value) / 100))}
+              />
+            </label>
+            <label className="text-sm">
+              Area counted (km around the pickup)
+              <Input
+                type="number"
+                step="0.5"
+                disabled={!editable}
+                value={config.surge.radiusKm}
+                onChange={(e) => update((c) => (c.surge.radiusKm = num(e.target.value)))}
+              />
+            </label>
+          </div>
+        </Card>
       </div>
       <div className="space-y-4">
         <Card title="Example">

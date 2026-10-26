@@ -23,6 +23,7 @@ interface Merchant {
   description: string | null;
   commissionRate: number | null;
   isFeatured: boolean;
+  featuredUntil: string | null;
   status: string;
   ratingAvg: number;
   ratingCount: number;
@@ -139,6 +140,9 @@ export default function MerchantPage() {
                 <input type="checkbox" checked={m.isFeatured} onChange={(e) => update.mutate({ isFeatured: e.target.checked })} />
                 Featured at the top of the shop directory
               </label>
+              {m.featuredUntil && new Date(m.featuredUntil) > new Date() && (
+                <p className="text-xs text-muted">Paid featured placement until {date(m.featuredUntil)}.</p>
+              )}
             </div>
           </Card>
           <Card title="Decision">
