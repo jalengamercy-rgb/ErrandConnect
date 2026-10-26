@@ -314,6 +314,7 @@ export class AdminOpsService {
         tx,
       );
     });
+    this.pricing.invalidate();
     return config as PricingConfig;
   }
 
@@ -396,6 +397,7 @@ export class AdminOpsService {
       select: {
         role: true,
         createdAt: true,
+        twoFactorEnabledAt: true,
         user: { select: { id: true, firstName: true, lastName: true, phone: true, email: true, status: true, lastLoginAt: true } },
       },
     });
@@ -481,13 +483,19 @@ export class AdminOpsService {
       users.map((u) => u.id),
       { title: dto.title, body: dto.body },
     );
-    if (dto.sms) for (const u of users) await this.messaging.sendSms(u.phone, `${dto.title}: ${dto.body}`);
+    // One failed SMS (e.g. a bad number) mustn't stop the rest. Deleted accounts have no real phone.
+    let smsFailed = 0;
+    if (dto.sms) {
+      for (const u of users.filter((u) => u.phone.startsWith('+'))) {
+        await this.messaging.sendSms(u.phone, `${dto.title}: ${dto.body}`).catch(() => smsFailed++);
+      }
+    }
     await this.audit.log({
       actorId: admin.id,
       action: 'notification.broadcast',
       entityType: 'notification',
-      metadata: { audience: dto.audience, title: dto.title, recipients: sent, sms: !!dto.sms },
+      metadata: { audience: dto.audience, title: dto.title, recipients: sent, sms: !!dto.sms, smsFailed },
     });
-    return { recipients: sent };
+    return { recipients: sent, smsFailed };
   }
 }

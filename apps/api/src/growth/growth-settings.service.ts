@@ -14,9 +14,15 @@ export class GrowthSettingsService {
     private readonly audit: AuditService,
   ) {}
 
+  private cache?: { at: number; config: GrowthConfig };
+
+  /** Cached for 30 seconds: it's read on every completed errand and quote. */
   async get(): Promise<GrowthConfig> {
+    if (this.cache && Date.now() - this.cache.at < 30_000) return this.cache.config;
     const setting = await this.prisma.platformSetting.findUnique({ where: { key: GROWTH_SETTING_KEY } });
-    return withGrowthDefaults(setting?.value as Partial<GrowthConfig> | undefined);
+    const config = withGrowthDefaults(setting?.value as Partial<GrowthConfig> | undefined);
+    this.cache = { at: Date.now(), config };
+    return config;
   }
 
   async update(config: unknown, actorId: string) {
@@ -41,6 +47,7 @@ export class GrowthSettingsService {
         tx,
       );
     });
+    this.cache = undefined;
     return value;
   }
 }

@@ -77,3 +77,7 @@ npm run test:e2e -w @errandconnect/api    # API tests against the errandconnect_
 - [API reference](docs/API.md)
 - [Payments & escrow](docs/PAYMENTS.md)
 - [Insights: risk rules and predictions](docs/INSIGHTS.md)
+- [Security](docs/SECURITY.md)
+- [Deployment and operations](docs/DEPLOYMENT.md)
+- [Load test](docs/LOAD-TEST.md)
+- [Release checklist](docs/RELEASE-CHECKLIST.md)

@@ -1,0 +1,18 @@
+# HTTPS certificates are fetched and renewed automatically (Let's Encrypt).
+{
+	email {$ACME_EMAIL}
+}
+
+{$API_DOMAIN} {
+	encode gzip
+	# Uploads are capped by the API at 5 MB; leave a little room.
+	request_body {
+		max_size 6MB
+	}
+	reverse_proxy api:3000
+}
+
+{$ADMIN_DOMAIN} {
+	encode gzip
+	reverse_proxy admin:3001
+}

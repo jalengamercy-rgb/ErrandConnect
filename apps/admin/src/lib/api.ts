@@ -1,57 +1,56 @@
 /** Set NEXT_PUBLIC_API_URL in apps/admin/.env.local */
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 
-const REFRESH_KEY = 'errandconnect.admin.refreshToken';
-
 export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** Machine-readable reason, e.g. MFA_REQUIRED. */
+    readonly code?: string,
   ) {
     super(message);
   }
 }
 
-interface TokenPair {
+interface AccessToken {
   accessToken: string;
-  refreshToken: string;
 }
 
 let accessToken: string | null = null;
 let refreshing: Promise<boolean> | null = null;
 let onExpired: (() => void) | null = null;
+let onMfaNeeded: (() => void) | null = null;
 
-const storage = {
-  get: () => (typeof window === 'undefined' ? null : window.localStorage.getItem(REFRESH_KEY)),
-  set: (token: string) => window.localStorage.setItem(REFRESH_KEY, token),
-  clear: () => window.localStorage.removeItem(REFRESH_KEY),
-};
+// Older versions kept the refresh token here; remove it.
+if (typeof window !== 'undefined') window.localStorage.removeItem('errandconnect.admin.refreshToken');
 
 /**
- * Login session. The access token stays in memory; the refresh token is
- * kept in localStorage so a page reload keeps you signed in.
+ * Login session. The access token stays in memory only. The refresh token is
+ * an httpOnly cookie set by the API: page scripts can't read it, so it can't
+ * be stolen by injected code, and a page reload still keeps you signed in.
  */
 export const session = {
-  start(tokens: TokenPair) {
+  start(tokens: AccessToken) {
     accessToken = tokens.accessToken;
-    storage.set(tokens.refreshToken);
   },
   end() {
     accessToken = null;
-    storage.clear();
   },
   onExpired(listener: () => void) {
     onExpired = listener;
   },
+  /** Called when an admin route needs two-factor sign-in. */
+  onMfaNeeded(listener: () => void) {
+    onMfaNeeded = listener;
+  },
   refresh(): Promise<boolean> {
     refreshing ??= (async () => {
       try {
-        const refreshToken = storage.get();
-        if (!refreshToken) return false;
         const res = await fetch(`${API_URL}/auth/refresh`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken }),
+          credentials: 'include',
+          body: '{}',
         });
         if (!res.ok) {
           if (res.status === 401) session.end();
@@ -69,6 +68,8 @@ export const session = {
   },
 };
 
+const MFA_CODES = ['MFA_REQUIRED', 'MFA_SETUP_REQUIRED'];
+
 function messageFrom(body: unknown, status: number) {
   const message = (body as { message?: unknown } | null)?.message;
   if (Array.isArray(message)) return message.join('\n');
@@ -82,7 +83,13 @@ async function send(method: string, path: string, body?: unknown, retried = fals
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   let res: Response;
   try {
-    res = await fetch(`${API_URL}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    res = await fetch(`${API_URL}${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      // The refresh cookie is only sent to /auth routes.
+      credentials: path.startsWith('/auth/') ? 'include' : 'same-origin',
+    });
   } catch {
     throw new ApiError(0, 'Cannot reach the API. Is it running?');
   }
@@ -92,7 +99,9 @@ async function send(method: string, path: string, body?: unknown, retried = fals
   }
   if (!res.ok) {
     const data = await res.json().catch(() => null);
-    throw new ApiError(res.status, messageFrom(data, res.status));
+    const code = (data as { code?: string } | null)?.code;
+    if (res.status === 403 && code && MFA_CODES.includes(code)) onMfaNeeded?.();
+    throw new ApiError(res.status, messageFrom(data, res.status), code);
   }
   return res;
 }

@@ -1,0 +1,72 @@
+# Single-server production setup: PostgreSQL, the API, the admin panel and
+# Caddy (automatic HTTPS). See docs/DEPLOYMENT.md.
+#
+#   cd deploy && cp .env.production.example .env.production   # fill it in
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+name: errandconnect
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: errand
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: errandconnect
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U errand -d errandconnect"]
+      interval: 10s
+      retries: 10
+
+  # Applies database migrations, then exits. The API waits for it.
+  migrate:
+    build: { context: .., dockerfile: apps/api/Dockerfile, target: migrate }
+    environment:
+      DATABASE_URL: postgresql://errand:${POSTGRES_PASSWORD}@postgres:5432/errandconnect?schema=public
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api:
+    build: { context: .., dockerfile: apps/api/Dockerfile }
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://errand:${POSTGRES_PASSWORD}@postgres:5432/errandconnect?schema=public
+      CORS_ORIGINS: https://${ADMIN_DOMAIN}
+      MPESA_CALLBACK_BASE_URL: https://${API_DOMAIN}
+      # Caddy is the one proxy in front of the API.
+      TRUST_PROXY: "1"
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  admin:
+    build:
+      context: ..
+      dockerfile: apps/admin/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://${API_DOMAIN}
+    restart: unless-stopped
+    depends_on: [api]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?set API_DOMAIN}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:?set ADMIN_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [api, admin]
+
+volumes:
+  pgdata:
+  uploads:
+  caddy_data:

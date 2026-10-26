@@ -11,12 +11,16 @@ import {
   ReviewListQueryDto,
   UpdateStaffDto,
 } from './ops.dto.js';
+import { MfaService } from '../auth/mfa.service.js';
 import { AdminOpsService } from './ops.service.js';
 
 // SUPER_ADMIN can use every route; the roles listed are the others allowed.
 @Controller('admin')
 export class AdminOpsController {
-  constructor(private readonly ops: AdminOpsService) {}
+  constructor(
+    private readonly ops: AdminOpsService,
+    private readonly mfa: MfaService,
+  ) {}
 
   /** Summary cards for the dashboard. Any staff member can see it. */
   @Get('dashboard')
@@ -129,6 +133,13 @@ export class AdminOpsController {
   @Staff('SUPER_ADMIN')
   updateStaff(@Param('userId', ParseUUIDPipe) userId: string, @Body() dto: UpdateStaffDto, @CurrentUser() admin: AuthUser) {
     return this.ops.updateStaff(userId, dto.role, admin);
+  }
+
+  /** For staff who lost their authenticator phone. */
+  @Delete('staff/:userId/mfa')
+  @Staff('SUPER_ADMIN')
+  resetStaffMfa(@Param('userId', ParseUUIDPipe) userId: string, @CurrentUser() admin: AuthUser) {
+    return this.mfa.reset(userId, admin);
   }
 
   @Delete('staff/:userId')

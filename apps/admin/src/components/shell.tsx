@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 import { useAuth, type StaffRole } from '@/lib/auth';
 import { humanize } from '@/lib/format';
+import { TwoFactorScreen } from './two-factor';
 import { Loading } from './ui';
 
 /** Sidebar entries and which roles see them (super admins see everything). */
@@ -45,6 +46,7 @@ export function Shell({ children }: { children: ReactNode }) {
     if (status === 'signedOut') router.replace('/login');
   }, [status, router]);
 
+  if (status === 'mfa') return <TwoFactorScreen />;
   if (status !== 'signedIn' || !me) return <Loading />;
   const items = NAV.filter((item) => can(...item.roles));
   const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname.startsWith(href));

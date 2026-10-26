@@ -14,7 +14,7 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (status === 'signedIn') router.replace('/');
+    if (status === 'signedIn' || status === 'mfa') router.replace('/');
   }, [status, router]);
 
   async function submit(event: FormEvent) {

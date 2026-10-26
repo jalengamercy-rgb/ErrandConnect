@@ -22,11 +22,21 @@ export interface Me {
   staffProfile: { role: StaffRole } | null;
 }
 
-type Status = 'loading' | 'signedOut' | 'signedIn';
+type Status = 'loading' | 'signedOut' | 'signedIn' | 'mfa';
+
+export interface MfaStatus {
+  enabled: boolean;
+  required: boolean;
+  sessionVerified: boolean;
+  recoveryCodesLeft: number;
+}
 
 interface AuthValue {
+  /** 'mfa' = signed in, but must set up or enter two-factor sign-in before using the panel. */
   status: Status;
   me: Me | undefined;
+  mfa: MfaStatus | undefined;
+  refreshMfa(): Promise<unknown>;
   login(phone: string, password: string): Promise<void>;
   logout(): Promise<void>;
   /** True if the logged-in staff member has one of these roles (super admins always do). */
@@ -44,17 +54,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       queryClient.clear();
       setStatus('signedOut');
     });
+    session.onMfaNeeded(() => void queryClient.invalidateQueries({ queryKey: ['mfa'] }));
     session.refresh().then((ok) => setStatus(ok ? 'signedIn' : 'signedOut'));
   }, [queryClient]);
 
   const meQuery = useQuery({ queryKey: ['me'], queryFn: () => api.get<Me>('/me'), enabled: status === 'signedIn' });
+  const mfaQuery = useQuery({
+    queryKey: ['mfa'],
+    queryFn: () => api.get<MfaStatus>('/auth/mfa'),
+    enabled: status === 'signedIn' && !!meQuery.data?.staffProfile,
+  });
 
   const login = useCallback(
     async (phone: string, password: string) => {
-      const result = await api.post<{ user: Me; tokens: { accessToken: string; refreshToken: string } }>('/auth/login', {
+      const result = await api.post<{ user: Me; tokens: { accessToken: string } }>('/auth/login', {
         phone,
         password,
         deviceName: 'Admin panel',
+        useCookie: true,
       });
       if (!result.user.staffProfile) {
         session.start(result.tokens);
@@ -85,9 +102,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [me],
   );
 
-  // A session restored from storage must belong to staff.
-  const effective: Status = status === 'signedIn' && (!me || !me.staffProfile) ? (meQuery.isError || me ? 'signedOut' : 'loading') : status;
-  const value = useMemo(() => ({ status: effective, me, login, logout, can }), [effective, me, login, logout, can]);
+  // A restored session must belong to staff, and pass two-factor sign-in when it's on or required.
+  const mfa = mfaQuery.data;
+  let effective: Status = status;
+  if (status === 'signedIn') {
+    if (!me || !me.staffProfile) effective = meQuery.isError || me ? 'signedOut' : 'loading';
+    else if (!mfa) effective = mfaQuery.isError ? 'signedIn' : 'loading';
+    else if ((mfa.enabled || mfa.required) && !mfa.sessionVerified) effective = 'mfa';
+  }
+  const refreshMfa = mfaQuery.refetch;
+  const value = useMemo(
+    () => ({ status: effective, me, mfa, refreshMfa, login, logout, can }),
+    [effective, me, mfa, refreshMfa, login, logout, can],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

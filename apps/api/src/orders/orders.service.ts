@@ -517,6 +517,11 @@ export class OrdersService {
     const here = { lat: profile.lastLat, lng: profile.lastLng };
     const radius = profile.maxDistanceKm ?? DEFAULT_JOB_RADIUS_KM;
 
+    // Rough box around the runner first, so the database only returns nearby
+    // jobs (never "the oldest 200 in the city"); exact distance is checked below.
+    const dLat = radius / 111;
+    const dLng = radius / (111 * Math.cos((here.lat * Math.PI) / 180));
+    const near = { lat: { gte: here.lat - dLat, lte: here.lat + dLat }, lng: { gte: here.lng - dLng, lte: here.lng + dLng } };
     const orders = await this.prisma.order.findMany({
       where: {
         status: 'PENDING',
@@ -524,16 +529,42 @@ export class OrdersService {
         customerId: { not: runnerId },
         deliveryType: { in: profile.deliveryTypes },
         categorySlug: { in: profile.servicesOffered },
+        // Jobs start at the pickup, or at the drop-off when there's no pickup.
+        OR: [
+          { pickupLat: near.lat, pickupLng: near.lng },
+          { pickupLat: null, dropoffLat: near.lat, dropoffLng: near.lng },
+        ],
       },
-      orderBy: { createdAt: 'asc' },
-      take: 200,
-      include: { category: { select: { name: true } } },
+      // Newest first: a backlog of old unclaimed errands mustn't hide new ones.
+      orderBy: { createdAt: 'desc' },
+      take: 300,
+      select: {
+        id: true,
+        orderNumber: true,
+        description: true,
+        urgency: true,
+        scheduledFor: true,
+        pickupAddress: true,
+        pickupLat: true,
+        pickupLng: true,
+        dropoffAddress: true,
+        dropoffLat: true,
+        dropoffLng: true,
+        distanceKm: true,
+        itemsCost: true,
+        runnerEarnings: true,
+        surgeFee: true,
+        createdAt: true,
+        category: { select: { name: true } },
+      },
     });
+    const config = orders.some((o) => o.surgeFee > 0) ? await this.pricing.getConfig() : null;
 
     return orders
       .map((o) => ({ order: o, awayKm: Math.round(haversineKm(here, jobStart(o)) * 10) / 10 }))
       .filter((j) => j.awayKm <= radius)
       .sort((a, b) => a.awayKm - b.awayKm)
+      .slice(0, 50)
       .map(({ order: o, awayKm }) => ({
         id: o.id,
         orderNumber: o.orderNumber,
@@ -548,8 +579,8 @@ export class OrdersService {
         itemsCost: o.itemsCost,
         runnerEarnings: o.runnerEarnings,
         runnerFee: o.runnerEarnings - o.itemsCost,
-        /** Extra the runner earns because demand is high here. */
-        surgeBonus: (o.pricingSnapshot as { quote?: { runner?: { surgeEarnings?: number } } } | null)?.quote?.runner?.surgeEarnings ?? 0,
+        /** Extra the runner earns because demand is high here (the runner's share of the surge fee). */
+        surgeBonus: config ? o.surgeFee - Math.round(o.surgeFee * (1 - config.surge.runnerShare)) : 0,
         createdAt: o.createdAt,
       }));
   }

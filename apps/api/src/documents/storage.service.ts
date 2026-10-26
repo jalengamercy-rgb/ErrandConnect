@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { randomToken } from '../common/crypto.js';
 
@@ -28,6 +28,11 @@ export class StorageService {
 
   read(key: string): Promise<Buffer> {
     return readFile(this.pathFor(key));
+  }
+
+  /** Deletes a file; missing files are ignored. */
+  remove(key: string): Promise<void> {
+    return rm(this.pathFor(key), { force: true });
   }
 
   private pathFor(key: string): string {

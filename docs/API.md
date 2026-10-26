@@ -4,27 +4,37 @@ Base URL (local): `http://localhost:3000`. Send `Authorization: Bearer <accessTo
 
 ## Auth
 
-| Method | Path                   | Notes                                                                                                                                                        |
-| ------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| POST   | `/auth/otp/request`    | **public**. `{ phone, purpose: REGISTER \| RESET_PASSWORD }`. 1 per minute, 5 per hour.                                                                      |
-| POST   | `/auth/otp/verify`     | **public**. `{ phone, purpose, code }` → `{ verificationToken }` (valid 15 min)                                                                              |
-| POST   | `/auth/register`       | **public**. `{ verificationToken, accountType: CUSTOMER \| RUNNER, firstName, lastName, password, pin, acceptTerms, acceptPrivacy, … }` → `{ user, tokens }` |
-| POST   | `/auth/login`          | **public**. `{ phone, password }`. Locks for 15 min after 5 wrong passwords.                                                                                 |
-| POST   | `/auth/refresh`        | **public**. `{ refreshToken }` → new tokens; the old refresh token stops working.                                                                            |
-| POST   | `/auth/logout`         | Ends the current session.                                                                                                                                    |
-| POST   | `/auth/password/reset` | **public**. `{ verificationToken, newPassword }`; signs out all devices.                                                                                     |
+| Method | Path                          | Notes                                                                                                                                                                                          |
+| ------ | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/auth/otp/request`           | **public**. `{ phone, purpose: REGISTER \| RESET_PASSWORD }`. 1 per minute, 5 per hour.                                                                                                        |
+| POST   | `/auth/otp/verify`            | **public**. `{ phone, purpose, code }` → `{ verificationToken }` (valid 15 min)                                                                                                                |
+| POST   | `/auth/register`              | **public**. `{ verificationToken, accountType: CUSTOMER \| RUNNER, firstName, lastName, password, pin, acceptTerms, acceptPrivacy, … }` → `{ user, tokens }`                                   |
+| POST   | `/auth/login`                 | **public**. `{ phone, password, useCookie? }`. Locks for 15 min after 5 wrong passwords. With `useCookie: true` (browsers) the refresh token is set as an httpOnly cookie instead of returned. |
+| POST   | `/auth/refresh`               | **public**. `{ refreshToken }`, or `{}` with the refresh cookie → new tokens; the old refresh token stops working.                                                                             |
+| POST   | `/auth/logout`                | Ends the current session.                                                                                                                                                                      |
+| POST   | `/auth/password/reset`        | **public**. `{ verificationToken, newPassword }`; signs out all devices.                                                                                                                       |
+| GET    | `/auth/mfa`                   | Staff: `{ enabled, required, sessionVerified, recoveryCodesLeft }`                                                                                                                             |
+| POST   | `/auth/mfa/setup`             | Staff: new authenticator secret and `otpauth://` link (not active until enabled)                                                                                                               |
+| POST   | `/auth/mfa/enable` `{ code }` | Staff: confirm with a code → 10 one-time recovery codes (shown once)                                                                                                                           |
+| POST   | `/auth/mfa/verify` `{ code }` | Staff: 6-digit code or a recovery code; needed once per session before admin routes                                                                                                            |
+
+Admin routes answer `403` with `code: MFA_REQUIRED` (enter a code) or `MFA_SETUP_REQUIRED` (set it up; always required in production) until the session has passed two-factor sign-in.
+
+Every response has an `X-Request-Id` header; error responses include it as `requestId`.
 
 ## Me (any logged-in user)
 
-| Method         | Path                                                   | Notes                                                    |
-| -------------- | ------------------------------------------------------ | -------------------------------------------------------- |
-| GET / PATCH    | `/me`                                                  | Profile                                                  |
-| PATCH          | `/me/customer-preferences`                             | Customers: favourite categories, notifications, language |
-| POST           | `/me/roles/customer`, `/me/roles/runner`               | Add the other account type                               |
-| POST           | `/me/email/verify/request`, `/me/email/verify/confirm` | Email OTP → verification level 2                         |
-| GET / POST     | `/me/addresses`                                        | Saved places; first one becomes default                  |
-| PATCH / DELETE | `/me/addresses/:id`                                    |                                                          |
-| GET / PUT      | `/me/emergency-contact`                                |                                                          |
+| Method         | Path                                                   | Notes                                                                                                                                                                                                                          |
+| -------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| GET / PATCH    | `/me`                                                  | Profile                                                                                                                                                                                                                        |
+| PATCH          | `/me/customer-preferences`                             | Customers: favourite categories, notifications, language                                                                                                                                                                       |
+| POST           | `/me/roles/customer`, `/me/roles/runner`               | Add the other account type                                                                                                                                                                                                     |
+| POST           | `/me/email/verify/request`, `/me/email/verify/confirm` | Email OTP → verification level 2                                                                                                                                                                                               |
+| GET / POST     | `/me/addresses`                                        | Saved places; first one becomes default                                                                                                                                                                                        |
+| PATCH / DELETE | `/me/addresses/:id`                                    |                                                                                                                                                                                                                                |
+| GET / PUT      | `/me/emergency-contact`                                |                                                                                                                                                                                                                                |
+| GET            | `/me/export`                                           | Everything held about you, as a JSON download (5 per hour)                                                                                                                                                                     |
+| POST           | `/me/delete` `{ password }`                            | Deletes the account: personal details erased, signed out everywhere; errand and payment records kept without personal details. Refused while errands, disputes or withdrawals are open, or with money in (or owed to) a wallet |
 
 ## Documents
 
@@ -209,6 +219,7 @@ Connect with `io(API_URL, { auth: { token: accessToken } })`. Events: `job.new`,
 | GET                         | `/admin/insights/churn/customers?risk=AT_RISK\|LIKELY_LOST\|LOST`, `/admin/insights/churn/runners`               | Marketing, Operations (runners: Runner manager too)                                      |
 | POST                        | `/admin/insights/churn/win-back` `{ userIds, title, message, promoCode? }`                                       | Marketing, Runner manager                                                                |
 | GET / POST / PATCH / DELETE | `/admin/staff`, `/admin/staff/:userId`                                                                           | Super admin only                                                                         |
+| DELETE                      | `/admin/staff/:userId/mfa`                                                                                       | Super admin: reset a staff member's two-factor sign-in (signs them out)                  |
 | GET                         | `/admin/audit-logs?entityType=&entityId=`                                                                        | Super admin only                                                                         |
 
 The first super admin is created by `npm run db:seed` when `SEED_ADMIN_PHONE` and `SEED_ADMIN_PASSWORD` are set.

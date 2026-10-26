@@ -9,7 +9,13 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.errandconnect.app"
+      "bundleIdentifier": "com.errandconnect.app",
+      "buildNumber": "1",
+      "supportsTablet": false,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "ErrandCONNECT uses your location to set delivery addresses, find nearby errands and show customers where their runner is."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +25,18 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.errandconnect.app"
+      "package": "com.errandconnect.app",
+      "versionCode": 1,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_CONTACTS",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
     },
     "web": {
       "output": "single",
@@ -38,14 +55,15 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "ErrandCONNECT uses your location to set delivery addresses and find nearby errands."
+          "locationWhenInUsePermission": "ErrandCONNECT uses your location to set delivery addresses, find nearby errands and show customers where their runner is."
         }
       ],
       [
         "expo-image-picker",
         {
           "photosPermission": "ErrandCONNECT needs your photos to upload ID documents.",
-          "cameraPermission": "ErrandCONNECT needs the camera to take your selfie and ID photos."
+          "cameraPermission": "ErrandCONNECT needs the camera to take your selfie and ID photos.",
+          "microphonePermission": false
         }
       ],
       "expo-secure-store"
@@ -53,6 +71,9 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     }
   }
 }

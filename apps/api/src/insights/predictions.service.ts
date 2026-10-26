@@ -127,7 +127,7 @@ export class PredictionsService {
     });
 
     // counts[hourAhead][weeksAgo-1], cells[cellKey][hourAhead][weeksAgo-1]
-    const counts = Array.from({ length: hours }, () => new Array<number>(HISTORY_WEEKS).fill(0));
+    const counts = Array.from({ length: hours }, () => Array.from({ length: HISTORY_WEEKS }, () => 0));
     const cells = new Map<string, { lat: number; lng: number; names: Map<string, number>; counts: number[][] }>();
     const nearHours = Math.min(3, hours);
     const categoryCounts = new Map<string, number>();
@@ -146,7 +146,7 @@ export class PredictionsService {
         lat: cell.lat,
         lng: cell.lng,
         names: new Map(),
-        counts: Array.from({ length: nearHours }, () => new Array<number>(HISTORY_WEEKS).fill(0)),
+        counts: Array.from({ length: nearHours }, () => Array.from({ length: HISTORY_WEEKS }, () => 0)),
       };
       entry.counts[hourAhead][weeksAgo - 1]++;
       // Name the area after where errands start: the pickup if there is one.

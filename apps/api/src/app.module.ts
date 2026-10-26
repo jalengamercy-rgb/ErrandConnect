@@ -2,12 +2,14 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { AccountModule } from './account/account.module.js';
 import { AdminModule } from './admin/admin.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { BusinessesModule } from './businesses/businesses.module.js';
 import { CategoriesController } from './categories/categories.controller.js';
 import { AuditModule } from './common/audit.service.js';
 import { AuthGuard } from './common/auth.guard.js';
+import { validateEnv } from './common/env.js';
 import { HttpThrottlerGuard } from './common/http-throttler.guard.js';
 import { DocumentsModule } from './documents/documents.module.js';
 import { GrowthModule } from './growth/growth.module.js';
@@ -26,7 +28,11 @@ import { SupportModule } from './support/support.module.js';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, envFilePath: process.env.NODE_ENV === 'test' ? ['.env.test', '.env'] : '.env' }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: process.env.NODE_ENV === 'test' ? ['.env.test', '.env'] : '.env',
+      validate: validateEnv,
+    }),
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -52,6 +58,7 @@ import { SupportModule } from './support/support.module.js';
     InvoicesModule,
     GrowthModule,
     InsightsModule,
+    AccountModule,
   ],
   controllers: [HealthController, CategoriesController],
   providers: [

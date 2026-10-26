@@ -71,6 +71,8 @@ model User {
   /// Consecutive wrong passwords; the account locks briefly after too many.
   failedLoginCount   Int           @default(0) @map("failed_login_count")
   lockedUntil        DateTime?     @map("locked_until")
+  /// Set when the person deleted their account; personal details are then erased.
+  deletedAt          DateTime?     @map("deleted_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -143,6 +145,8 @@ model Session {
   ipAddress        String?   @map("ip_address")
   expiresAt        DateTime  @map("expires_at")
   revokedAt        DateTime? @map("revoked_at")
+  /// When this session passed the staff two-factor check.
+  mfaVerifiedAt    DateTime? @map("mfa_verified_at")
   createdAt        DateTime  @default(now()) @map("created_at")
 
   @@index([userId])
@@ -469,11 +473,17 @@ enum StaffRole {
 }
 
 model StaffProfile {
-  userId          String    @id @map("user_id")
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role            StaffRole
-  twoFactorSecret String?   @map("two_factor_secret")
-  createdAt       DateTime  @default(now()) @map("created_at")
+  userId             String    @id @map("user_id")
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role               StaffRole
+  /// Authenticator-app (TOTP) secret, encrypted. Set during setup, used once enabled.
+  twoFactorSecret    String?   @map("two_factor_secret")
+  twoFactorEnabledAt DateTime? @map("two_factor_enabled_at")
+  /// Last 30-second step accepted, so a code can't be used twice.
+  twoFactorLastStep  Int?      @map("two_factor_last_step")
+  /// One-time recovery codes (hashed), for a lost phone.
+  recoveryCodes      String[]  @map("recovery_codes")
+  createdAt          DateTime  @default(now()) @map("created_at")
 
   @@map("staff_profiles")
 }

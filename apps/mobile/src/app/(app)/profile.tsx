@@ -66,6 +66,7 @@ export default function ProfileScreen() {
       <Button title="Company accounts" variant="secondary" onPress={() => router.push('/business')} />
       <Button title="My shop" variant="secondary" onPress={() => router.push('/shop')} />
       <Button title="Help & support" variant="secondary" onPress={() => router.push('/support')} />
+      <Button title="Privacy & account" variant="secondary" onPress={() => router.push('/account')} />
       <Button title="Log out" variant="ghost" onPress={signOut} />
     </Screen>
   );

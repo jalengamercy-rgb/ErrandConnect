@@ -6,6 +6,7 @@ import { UsersController } from '../users/users.controller.js';
 import { UsersService } from '../users/users.service.js';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
+import { MfaService } from './mfa.service.js';
 import { OtpService } from './otp.service.js';
 import { TokensService } from './tokens.service.js';
 
@@ -19,7 +20,7 @@ import { TokensService } from './tokens.service.js';
     }),
   ],
   controllers: [AuthController, UsersController],
-  providers: [AuthService, OtpService, TokensService, UsersService, AddressesService],
-  exports: [OtpService, TokensService, UsersService],
+  providers: [AuthService, OtpService, TokensService, UsersService, AddressesService, MfaService],
+  exports: [OtpService, TokensService, UsersService, MfaService],
 })
 export class AuthModule {}

@@ -11,6 +11,7 @@ import { useAction } from '@/lib/hooks';
 interface StaffRow {
   role: StaffRole;
   createdAt: string;
+  twoFactorEnabledAt: string | null;
   user: {
     id: string;
     firstName: string;
@@ -45,11 +46,12 @@ export default function StaffPage() {
   }, [key]);
   const change = useAction((b: { userId: string; role: StaffRole }) => api.patch(`/admin/staff/${b.userId}`, { role: b.role }), [key]);
   const remove = useAction((userId: string) => api.delete(`/admin/staff/${userId}`), [key]);
+  const resetMfa = useAction((userId: string) => api.delete(`/admin/staff/${userId}/mfa`), [key]);
 
   return (
     <>
       <PageHeader title="Staff" subtitle="Each role only sees the parts of the admin panel it needs" />
-      <ErrorBox error={error ?? add.error ?? change.error ?? remove.error} />
+      <ErrorBox error={error ?? add.error ?? change.error ?? remove.error ?? resetMfa.error} />
       <Table
         rows={data}
         columns={[
@@ -77,17 +79,31 @@ export default function StaffPage() {
               ),
           },
           { header: 'Account', cell: (s) => <Badge status={s.user.status} /> },
+          { header: 'Two-factor', cell: (s) => (s.twoFactorEnabledAt ? 'On' : <span className="text-warning">Not set up</span>) },
           { header: 'Last login', cell: (s) => dateTime(s.user.lastLoginAt) },
           {
             header: '',
             cell: (s) =>
               s.user.id !== me?.id && (
-                <Button
-                  variant="ghost"
-                  onClick={() => window.confirm(`Remove ${fullName(s.user)} from staff?`) && remove.mutate(s.user.id)}
-                >
-                  Remove
-                </Button>
+                <div className="flex gap-1">
+                  {s.twoFactorEnabledAt && (
+                    <Button
+                      variant="ghost"
+                      onClick={() =>
+                        window.confirm(`Reset two-factor sign-in for ${fullName(s.user)}? They will be signed out and set it up again.`) &&
+                        resetMfa.mutate(s.user.id)
+                      }
+                    >
+                      Reset 2FA
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    onClick={() => window.confirm(`Remove ${fullName(s.user)} from staff?`) && remove.mutate(s.user.id)}
+                  >
+                    Remove
+                  </Button>
+                </div>
               ),
           },
         ]}
